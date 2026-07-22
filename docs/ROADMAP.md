@@ -16,27 +16,39 @@ Everything in the single `6f73121` checkpoint commit:
 - Loan Status pipeline (7 states), Case Timeline, Checklist Progress, Next
   Action Card, Loan Health Score
 
-Status: **Done**, builds clean, **not deployed, no migration executed.**
+Status: **Done**, builds clean, **not deployed; migrations now executed
+against the live DB (see Phase 2, step 1).**
 
-## Phase 2 — Production Readiness (Not Started)
+## Phase 2 — Production Readiness (In Progress)
 
 The immediate next work, in the order it's actually unblockable:
 
-1. **Execute migrations** — a human reviews and runs all 8 files in
-   `supabase/migrations/` in order, against a real Supabase project.
-2. **Resolve Gemini billing** — upgrade the Google Cloud project so
-   `gemini-2.5-pro` has real quota; re-verify OCR/AI Summary against an actual
-   NRIC and salary slip.
-3. **Seed real mortgage rule data** — requires unfreezing the Rule Admin UI,
-   or a human authoring rows directly via SQL in the interim.
+1. **Execute migrations** — **Done.** All 6 non-superseded files in
+   `supabase/migrations/` were run, in order, against the live Supabase
+   project, confirmed directly by the user in the Supabase SQL Editor:
+   `20260716020000_create_loan_case_rpc.sql`,
+   `20260721010000_document_management_mvp.sql`,
+   `20260722010000_mortgage_rules_engine.sql`,
+   `20260723010000_mortgage_rule_admin.sql`,
+   `20260724010000_ocr_document_extraction.sql`,
+   `20260725010000_loan_workflow.sql`. The two earliest draft files
+   (`20260716000000_loan_case_creation.sql`,
+   `20260716010000_fix_create_loan_case_rpc.sql`) were superseded and
+   intentionally never run.
+2. **Resolve Gemini billing** — **Not Started, blocked.** Upgrade the Google
+   Cloud project so `gemini-2.5-pro` has real quota; re-verify OCR/AI Summary
+   against an actual NRIC and salary slip.
+3. **Seed real mortgage rule data** — **Not Started, blocked.** The
+   `mortgage_rules` schema is live but has zero rows. Requires unfreezing the
+   Rule Admin UI, or a human authoring rows directly via SQL in the interim.
 4. **Tag real `document_types`** with `ocr_kind` so "Extract Data" appears on
-   the right uploads.
+   the right uploads. Not yet done on any row.
 5. **Product decisions**: Dashboard bucket definitions, WhatsApp provider
    choice (see [TODO.md](TODO.md) Open Questions).
 6. **Deployment**: pick a hosting target, stand up CI, see
    [DEPLOYMENT.md](DEPLOYMENT.md).
-7. **Push the checkpoint commit** to `origin/main` (currently held locally,
-   by design — awaiting explicit approval).
+7. **Push the checkpoint commit** to `origin/main` — **Done.** `main` is
+   confirmed up to date with `origin/main`.
 
 ## Phase 3 — Banker MVP Completion (Blocked on Phase 2 decisions)
 

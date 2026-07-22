@@ -26,13 +26,21 @@ PII (NRIC, income). Full vision: [docs/product/vision.md](product/vision.md).
   PostgREST), Gemini 2.5 Pro.
 - **Build health**: `npx tsc --noEmit`, `npm run lint`, `npm run build` all
   clean as of the last checkpoint.
-- **Git**: 2 commits on `main`. The second (`6f73121`, "Phase 1 Complete")
-  contains the entire product described in this documentation set.
-  **Not pushed to `origin/main`.**
-- **Database**: **zero migrations have been executed against the live
-  database.** 8 authored `.sql` files exist in `supabase/migrations/`,
-  waiting for human review and manual execution. Nothing described in this
-  documentation is "live" until that happens.
+- **Git**: `main` is confirmed **pushed and up to date with `origin/main`**
+  (an earlier version of this document wrongly claimed it was unpushed — that
+  claim was stale). Commits include `6f73121` ("Phase 1 Complete"), which
+  contains the entire product described in this documentation set, and
+  `0f747d6` ("AIKIM Project Memory v1.0").
+- **Database**: **6 of 8 authored migrations have been executed against the
+  live database**, in order, confirmed directly by the user in the Supabase
+  SQL Editor: `create_loan_case_rpc`, `document_management_mvp`,
+  `mortgage_rules_engine`, `mortgage_rule_admin`, `ocr_document_extraction`,
+  `loan_workflow`. The two earliest draft files (`loan_case_creation`,
+  `fix_create_loan_case_rpc`) were superseded and intentionally never run.
+  The schema described in this documentation is now live, but **no real
+  mortgage rule data has been seeded yet** (`mortgage_rules` is schema-only,
+  zero rows) and `document_types.ocr_kind` has not been set on any actual
+  row.
 - **Deployment**: none. Not hosted anywhere.
 - **AI (Gemini)**: package installed, API key configured, pipeline verified
   end-to-end with synthetic test fixtures — but blocked on Gemini billing for
@@ -116,12 +124,15 @@ Full reasoning for each: [docs/decisions/](decisions/README.md).
 ## ✔ Next Phase Goals
 
 In order (full detail: [ROADMAP.md](ROADMAP.md)):
-1. Human executes the 8 pending migrations.
+1. ~~Human executes the pending migrations.~~ **Done** — 6 of 8 executed
+   against the live DB (2 early draft files superseded, intentionally not
+   run).
 2. Resolve Gemini billing.
 3. Product decisions: Dashboard bucket definitions, WhatsApp provider.
 4. Seed real mortgage rule data.
 5. Stand up deployment + CI.
-6. Push the checkpoint commit (only when told to).
+6. ~~Push the checkpoint commit.~~ **Done** — `main` is confirmed up to date
+   with `origin/main`.
 7. Then: Dashboard buckets, WhatsApp receive-and-attach, document
    verify/reject.
 8. Explicitly out of scope until separately approved: DSR, eligibility,

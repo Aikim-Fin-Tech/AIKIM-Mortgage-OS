@@ -11,9 +11,9 @@ Snapshot as of 2026-07-26. Verified against the repository directly — see
 | `npm run lint` | ✅ Clean |
 | `npm run build` | ✅ Succeeds, all 11 routes compile |
 | Dev server boots | ✅ Verified, zero console errors on unauthenticated pages |
-| Migrations executed against live DB | ❌ **None** — 8 files authored, 0 run |
+| Migrations executed against live DB | ✅ **6 of 8 files executed**, in order, confirmed directly by the user in the Supabase SQL Editor. The 2 earliest draft files (`20260716000000_loan_case_creation.sql`, `20260716010000_fix_create_loan_case_rpc.sql`) were superseded by `20260716020000_create_loan_case_rpc.sql` and intentionally never run |
 | Deployed anywhere | ❌ No |
-| Pushed to GitHub | ❌ No — local commit only, 1 ahead of `origin/main` |
+| Pushed to GitHub | ✅ Yes — `main` is up to date with `origin/main` |
 
 ## Feature Status
 
@@ -25,7 +25,7 @@ Snapshot as of 2026-07-26. Verified against the repository directly — see
 | Global Search | Implemented | — | None |
 | Document Upload/Preview/Download/Delete | Implemented | — | None |
 | Borrower Profile | Implemented | — | None |
-| Mortgage Rules Engine (matching) | Implemented (no data) | P1 | Author real rules once admin UI unfrozen |
+| Mortgage Rules Engine (matching) | Implemented, schema live in DB — zero rule rows | P1 | Seed real rule data (admin UI still frozen; author via SQL in the interim) |
 | Mortgage Rule Admin UI | Implemented, **frozen** | — | Resume when unfrozen |
 | OCR (NRIC, Salary Slip) | Implemented, unverified on real docs | P0 | Resolve Gemini billing |
 | AI Case Summary | Implemented, unverified on real docs | P0 | Resolve Gemini billing |
@@ -52,10 +52,9 @@ by explicit instruction).
 
 ## What Is Blocking Production Right Now
 
-1. No migration has been executed — nothing in this document is "live" until a
-   human runs the 8 files in `supabase/migrations/` in order.
-2. No real mortgage rule data exists — the engine has nothing to match against.
-3. Gemini billing tier blocks real OCR/AI Summary usage.
-4. No deployment target exists.
+1. No real mortgage rule data exists — `mortgage_rules` is schema-only, zero
+   rows, so the engine has nothing to match against.
+2. Gemini billing tier blocks real OCR/AI Summary usage.
+3. No deployment target exists.
 
 See [TODO.md](TODO.md) for the full technical debt list.
