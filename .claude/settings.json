@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx eslint*)",
+      "Bash(npm run lint)"
+    ],
+    "deny": [
+      "Bash(supabase db push*)",
+      "Bash(supabase migration up*)",
+      "Bash(supabase db reset*)",
+      "Bash(psql*)",
+      "Bash(npm install*)",
+      "Bash(npm uninstall*)",
+      "Bash(npm update*)",
+      "Bash(npm publish*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean*)",
+      "Bash(rm -rf*)",
+      "Bash(vercel deploy*)",
+      "Bash(vercel --prod*)",
+      "Edit(package.json)",
+      "Edit(package-lock.json)",
+      "Write(package.json)",
+      "Write(package-lock.json)"
+    ]
+  }
+}
