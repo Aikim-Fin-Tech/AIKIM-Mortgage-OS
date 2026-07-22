@@ -1,5 +1,9 @@
 # Mortgage Case Lifecycle
 
+> Consolidated business-process view (includes Health Score, Next Action,
+> Timeline): [../MORTGAGE_ENGINE.md](../MORTGAGE_ENGINE.md) and
+> [../WORKFLOW.md](../WORKFLOW.md).
+
 The intended progression of a `loan_cases` row, per the schema's enums —
 **Implemented** at the data-model level. The UI to drive transitions after creation
 is **Planned** (does not exist yet) — see [banker-workflow.md](banker-workflow.md).

@@ -1,5 +1,8 @@
 # API Surface
 
+> Consolidated version of this reference: [../API_REFERENCE.md](../API_REFERENCE.md).
+> This file remains the detailed source of truth; keep both in sync.
+
 No separate REST/GraphQL API — the app talks to Postgres via Supabase's PostgREST
 layer, gated by RLS. The "API" is the set of Server Actions and RPCs below.
 

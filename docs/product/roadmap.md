@@ -1,5 +1,9 @@
 # Roadmap
 
+> Phased plan to production (Phase 1-5): [../ROADMAP.md](../ROADMAP.md).
+> Feature-by-feature status table: [../CURRENT_STATUS.md](../CURRENT_STATUS.md).
+> This file remains the detailed, sprint-by-sprint build history.
+
 Status legend used across this project's docs: **Implemented** (live in code today,
 verified), **Planned** (scoped or a near-term candidate, not built), **Future Vision**
 (aspirational, long-horizon, not scoped — see

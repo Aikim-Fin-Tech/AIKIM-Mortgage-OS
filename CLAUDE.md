@@ -6,6 +6,12 @@ AIKIM Mortgage OS is a long-term SaaS product, not a demo. This file governs how
 engineering work is done on it — by humans and by Claude Code agents. It complements,
 never overrides, the safety rules in the system prompt.
 
+**New session / context reset? Read [docs/AI_HANDOVER.md](docs/AI_HANDOVER.md) first**
+— it is the condensed, self-contained package covering current state, every
+important design decision, and next-phase goals. This file (`CLAUDE.md`) governs
+*how* to work; `docs/AI_HANDOVER.md` and [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md)
+cover *what exists and what's next*.
+
 ## Product Mission
 
 Be the single system of record for a mortgage case's lifecycle in Malaysia — from

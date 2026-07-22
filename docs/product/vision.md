@@ -1,5 +1,7 @@
 # Vision
 
+> 5-minute overview built on this: [../PROJECT_SUMMARY.md](../PROJECT_SUMMARY.md).
+
 AIKIM Mortgage OS is the single system of record for a mortgage case's lifecycle in
 Malaysia: who the customer is, which bank and banker are involved, what stage the
 case is at, what documents exist, and a full audit trail.

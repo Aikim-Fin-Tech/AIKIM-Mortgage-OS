@@ -1,5 +1,7 @@
 # Database
 
+> Consolidated version: [../DATABASE.md](../DATABASE.md).
+>
 > Reconstructed from inline comments in `src/lib/database/*.ts` and
 > `supabase/migrations/*.sql`. Not verified against a live schema export — none
 > exists in this repo yet. Update this file the moment a real baseline is committed.

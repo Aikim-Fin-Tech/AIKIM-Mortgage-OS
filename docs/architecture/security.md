@@ -1,5 +1,8 @@
 # Security
 
+> Referenced throughout [../DATABASE.md](../DATABASE.md) (RLS inventory) and
+> [../AI_HANDOVER.md](../AI_HANDOVER.md) ("Things You Must Never Do").
+
 ## Authorization model
 
 RLS is the only real authorization boundary. App-level role checks (e.g.

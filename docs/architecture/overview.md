@@ -1,5 +1,8 @@
 # Architecture Overview
 
+> Consolidated version: [../ARCHITECTURE.md](../ARCHITECTURE.md) (also covers
+> AI Engine, WhatsApp, n8n, MCP, Edge Functions, GitHub structure).
+
 ## Stack
 
 - Next.js 16.2.10 (App Router) — breaking changes from typical training data, see

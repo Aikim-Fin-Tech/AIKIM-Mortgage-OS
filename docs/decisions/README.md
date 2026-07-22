@@ -1,5 +1,8 @@
 # Architecture Decision Records
 
+> All 9 decisions condensed into one section: [../AI_HANDOVER.md](../AI_HANDOVER.md)
+> ("All Important Design Decisions"). Read here for full reasoning per decision.
+
 ADRs capture significant technical decisions for AIKIM Mortgage OS: what was decided,
 why, and what it costs. Use [template.md](template.md) for new ones.
 
