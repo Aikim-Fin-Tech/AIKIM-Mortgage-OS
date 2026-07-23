@@ -36,9 +36,12 @@ first banker use AIKIM in a real loan case?" P0 order:
 - Sprint 6.2 Phase 2 — Mortgage Rule Admin (`/settings/mortgage-rules`,
   `/settings/document-categories`). Code complete, migration authored, **not
   executed**. See [../decisions/0007-mortgage-rule-admin.md](../decisions/0007-mortgage-rule-admin.md).
-- Mortgage Knowledge Base, Rule Version UI, further admin enhancements, Advanced
-  Rule Engine work, Event History UI — none started beyond what Phase 2 already
-  shipped.
+- Rule Version UI, further admin enhancements, Advanced Rule Engine work, Event
+  History UI — none started beyond what Phase 2 already shipped.
+- Mortgage Knowledge Base beyond Income Knowledge: **Commitment Knowledge is not
+  started** and requires a separate CTO review before starting — see "Sprint 6.3B-1
+  — Income Knowledge Implementation" below. Income Knowledge itself is no longer
+  frozen; it has been authored per explicit CTO authorization.
 
 ## Implemented
 
@@ -82,6 +85,30 @@ first banker use AIKIM in a real loan case?" P0 order:
   one); a Loan Health Score (equal-weighted, 4 factors, no AI). Migration
   (`20260725010000_loan_workflow.sql`) authored, not confirmed run. See
   [../decisions/0009-loan-processing-workflow.md](../decisions/0009-loan-processing-workflow.md).
+- **Sprint 6.3B-1 — Income Knowledge Implementation**: the first implemented slice
+  of the Mortgage Knowledge Database blueprint
+  ([mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)). 5 new
+  tables (`banks`, `bank_products`, `income_recognition_rules`, `evidence`,
+  `derivation_results`) — migrations authored
+  (`20260726010000_income_knowledge_schema.sql`,
+  `20260726020000_income_knowledge_rls.sql`), **not executed**; a template seed
+  (`supabase/seeds/20260726010000_income_knowledge_seed.sql`, placeholder values
+  only, lives outside `supabase/migrations/` by design, never auto-run); a new
+  `src/lib/income-knowledge/` module (matching algorithm extending
+  `src/lib/mortgage-rules/match-rule.ts` with bank/product scoping, plus two
+  Zod-validated Server Actions, `recordEvidence` and `computeIncomeRecognition`);
+  5 read-only functions in `src/lib/database/income-knowledge.ts`. No UI —
+  explicitly out of scope this sprint. See
+  [../architecture/database.md](../architecture/database.md) for the 5 tables and
+  [../architecture/security.md](../architecture/security.md) for the PII-handling
+  decision on recognized income figures.
+  **CTO authorization**: the CTO explicitly authorized this specific slice —
+  Sprint 6.3B-1, scoped to Income Knowledge only — in conversation, with the
+  express condition that Commitment Knowledge requires a separate CTO review
+  before it may start. This did not lift approval for the rest of Sprint 6.3B or
+  for the database PRD generally; the primary record of this authorization is in
+  [mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)'s
+  Status section. Commitment Knowledge is **not started**.
 
 ## Planned
 

@@ -1,7 +1,11 @@
 # Mortgage Knowledge Database PRD
 
-Status: **Draft — database-design blueprint only. Awaiting CTO approval before
-Sprint 6.3B / any SQL or migration work begins.**
+Status: **Draft blueprint; CTO-approved for Sprint 6.3B-1 (Income Knowledge) only,
+which has been implemented (code authored, not executed) — see the "Sprint 6.3B-1
+authorization" update in the Status section below. Every other domain in this
+document (Commitment Knowledge, Property Rules, DSR Rules, Eligibility Engine, AI
+Recommendation) remains awaiting a separate CTO review before any further SQL or
+migration work begins.**
 Version: 1.0
 Date: 2026-07-23
 Author: supabase-architect (Sprint 6.3, Day 3 of the same scoping exercise)
@@ -1042,3 +1046,29 @@ above changes because of it — no migration, schema proposal, ADR, code, or
 UI work is authorized by this document or by its designation as the
 baseline, and Sprint 6.3B remains a separate, future, separately-approved
 unit of work.
+
+**Sprint 6.3B-1 authorization**: per explicit CTO instruction in conversation
+("Start Sprint 6.3B-1: Income Knowledge Implementation. Follow the approved
+Mortgage Knowledge Database PRD exactly... Wait for CTO review before
+proceeding to Commitment Knowledge"), the CTO authorized one specific,
+narrower slice of Sprint 6.3B: Income Knowledge only — the `banks`,
+`bank_products`, `income_recognition_rules`, `evidence`, and
+`derivation_results` tables (Section 3), delivered in the small, reviewable
+steps the CTO specified (schema migration, then RLS migration, then
+TypeScript services/RPC interfaces, then a seeder script kept separate from
+migrations, with no UI). That work has been delivered — migrations authored
+in `supabase/migrations/20260726010000_income_knowledge_schema.sql` and
+`supabase/migrations/20260726020000_income_knowledge_rls.sql` (both
+**authored, not executed**, per this codebase's Migration Policy — no agent
+ever executes a migration), a template seed in
+`supabase/seeds/20260726010000_income_knowledge_seed.sql`, and a new
+`src/lib/income-knowledge/` module plus `src/lib/database/income-knowledge.ts`.
+See [../product/roadmap.md](roadmap.md) for the full implementation entry and
+[../architecture/database.md](../architecture/database.md) for the 5 tables.
+This paragraph reports the CTO's own authorization; it is the CTO's decision,
+not one this document, any agent, or any other doc asserted on its own
+authority. This authorization is scoped to Sprint 6.3B-1 / Income Knowledge
+only — it does **not** extend to Commitment Knowledge, Property Rules, DSR
+Rules, the Eligibility Engine, or AI Recommendation. Per the CTO's own
+explicit condition, **Commitment Knowledge requires a separate CTO review
+before it may start**, and is not started as of this update.

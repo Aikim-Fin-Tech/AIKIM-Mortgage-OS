@@ -33,6 +33,11 @@ live only in the Supabase SQL Editor. Producing a real baseline is top priority 
 | `loan_case_required_document_events` | **Planned.** Append-only audit trail of every add/mark-not-required/reactivate transition, keyed by rule change. |
 | `document_extractions` | **Planned.** One row per OCR attempt (`20260724010000_ocr_document_extraction.sql`) — `document_id`, `kind`, `extracted_data` (jsonb, null on failure), `model_name`, `error`, `extracted_by_user_id`. Append-only — every attempt kept, never overwritten. See [0008](../decisions/0008-ocr-and-ai-case-summary.md). |
 | `loan_case_timeline_events` | **Planned.** `20260725010000_loan_workflow.sql`. Explicitly-recorded case events (`document_uploaded`, `ocr_completed`, `status_changed`) only — "Customer/Loan Created" and "Checklist Updated" are synthesized at read time, not stored here. Append-only. Visible to any staff role (not `audit_logs`-gated). See [0009](../decisions/0009-loan-processing-workflow.md). |
+| `banks` | **Planned.** Sprint 6.3B-1 (Income Knowledge). `name` (unique), `short_code`, `is_active`/`effective_from`/`effective_to` (deactivate-only, no `version` column — a bank is an entity, not a revised policy value). Structured replacement for `loan_cases`/`bankers`' free-text `bank_name`, not yet wired to either. Authored in `supabase/migrations/20260726010000_income_knowledge_schema.sql`. Not confirmed run yet. |
+| `bank_products` | **Planned.** Sprint 6.3B-1. `bank_id` (FK → `banks`), `product_name`, `product_code`, `financing_structure` (open vocabulary, no classification scheme asserted), `is_active`/`effective_from`/`effective_to`. Authored in `supabase/migrations/20260726010000_income_knowledge_schema.sql`. Not confirmed run yet. |
+| `income_recognition_rules` | **Planned.** Sprint 6.3B-1. Converts a raw income `evidence` fact into a bank/product-scoped recognized figure. `bank_id` (required, never a wildcard), `bank_product_id` (nullable = this bank's default), the same 4 wildcard-if-null borrower-profile columns `mortgage_rules` uses (`nationality`, `income_country`, `employment_type`, `income_structure`), `recognition_method` (`full_value`\|`percentage_haircut`\|`rolling_average`, CHECK-constrained), `haircut_percentage`, `averaging_window_months`, `minimum_history_months`, `version`, `is_active`/`effective_from`/`effective_to`. Matched by `src/lib/income-knowledge/match-income-rule.ts`, not SQL — extends `src/lib/mortgage-rules/match-rule.ts`'s wildcard/most-specific-wins algorithm with `bank_id`/`bank_product_id` scoping. Same partial-unique-active-profile-version index and no-empty-string-wildcard guard as `mortgage_rules`. No real bank policy figures (haircut %, averaging window) are seeded by the migration itself. Authored in `supabase/migrations/20260726010000_income_knowledge_schema.sql`. Not confirmed run yet. |
+| `evidence` | **Planned.** Sprint 6.3B-1. A normalized fact record decoupled from its origin (OCR, manual entry, customer declaration), the shared input every Derivation Knowledge rule (income today; commitment, property in future sprints) reasons over. `loan_case_id` (FK, cascade delete), `evidence_type`/`source_type` (open vocabulary, not enums), `value` (jsonb), `source_document_id`/`source_extraction_id` (nullable FKs), `captured_by_user_id`, `captured_at`, `superseded_by_evidence_id` (a correction is always a new row pointing forward; the corrected row is never edited). Append-only — no UPDATE/DELETE RLS policy at all. Authored in `supabase/migrations/20260726010000_income_knowledge_schema.sql`. Not confirmed run yet. |
+| `derivation_results` | **Planned.** Sprint 6.3B-1. An append-only, computation-time snapshot of one derivation output for a case + `bank_product_id`, referencing the rule row/version that produced it. `domain` (`income_recognition`\|`commitment_recognition`\|`property_rules`\|`dsr`, CHECK-constrained — only `income_recognition` has a live rule table as of this migration), `rule_version` (snapshot copy, kept redundantly so the reasoning chain stays reconstructable without a join), `input_evidence_ids` (jsonb array of `evidence.id`, not a join table), `result_value` (jsonb), `computed_by_user_id` (nullable — a system recomputation may have no acting user). **`rule_id` is a deliberate non-FK, polymorphic reference** — it conceptually points at whichever domain-specific rule table `domain` names, but Postgres cannot express one FK across four tables and three of those tables (`commitment_recognition_rules`, `dsr_rules`, `property_rules`) don't exist yet. This is a considered design choice (documented inline in the migration, mirroring ADR 0006's precedent that rule-matching logic lives in TypeScript, not SQL), not an oversight — validating `rule_id` against `domain` is an application-layer responsibility. Append-only — no UPDATE/DELETE RLS policy at all. Authored in `supabase/migrations/20260726010000_income_knowledge_schema.sql`. Not confirmed run yet. |
 
 **Confirmed not to exist**: `case_notes`, `follow_ups`, `activity_logs`, `ai_sessions`,
 `loan_assessments`, `whatsapp_conversations`.
@@ -95,6 +100,18 @@ same visibility-via-`EXISTS` pattern, joined through `documents → loan_cases`.
 
 `loan_case_timeline_events` (`20260725010000_loan_workflow.sql`) — same pattern,
 `STAFF_ROLES` insert-only, append-only.
+
+`banks`, `bank_products`, `income_recognition_rules` (`20260726020000_income_knowledge_rls.sql`)
+— read-only reference/rule data for any authenticated user (`auth.uid() is not null`),
+same Phase-1-before-Phase-2 posture `mortgage_rules`/`document_categories` shipped
+with. No insert/update/delete policy — writes are a future, separately-approved
+admin-surface migration.
+
+`evidence`, `derivation_results` (`20260726020000_income_knowledge_rls.sql`) — same
+visibility-via-`EXISTS` pattern re-checking the parent `loan_cases` row, joined via
+`loan_case_id`. `STAFF_ROLES` can insert; no update/delete policy at all —
+append-only. No DELETE policy on any of the 5 tables above, matching `mortgage_rules`'
+"no DELETE RLS policy at all, ever" precedent.
 
 ## Roles
 
