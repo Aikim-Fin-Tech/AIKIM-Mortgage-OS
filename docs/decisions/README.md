@@ -35,6 +35,7 @@ session strategy, a new architectural pattern.
 | [0008](0008-ocr-and-ai-case-summary.md) | OCR (Gemini 2.5 Pro) and AI Case Summary | Proposed (migration authored, not confirmed run) — dependency installed, key configured, verified working end-to-end pending Gemini billing |
 | [0009](0009-loan-processing-workflow.md) | Loan Processing Workflow — status pipeline, timeline, and 3 no-AI scores | Proposed (migration authored, not confirmed run) |
 | [0010](0010-income-knowledge-implementation.md) | Income Knowledge Implementation — Sprint 6.3B-1 | Proposed (migrations authored, not confirmed run) |
+| [0011](0011-commitment-knowledge-implementation.md) | Commitment Knowledge Implementation — Sprint 6.3B-2 | Proposed (migrations authored, not confirmed run) |
 
 "Retroactive" means the decision was already implemented in the codebase before this
 ADR was written; the ADR documents evidence found in code, it does not introduce a

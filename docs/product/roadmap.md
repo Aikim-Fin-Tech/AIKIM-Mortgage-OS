@@ -38,10 +38,12 @@ first banker use AIKIM in a real loan case?" P0 order:
   executed**. See [../decisions/0007-mortgage-rule-admin.md](../decisions/0007-mortgage-rule-admin.md).
 - Rule Version UI, further admin enhancements, Advanced Rule Engine work, Event
   History UI — none started beyond what Phase 2 already shipped.
-- Mortgage Knowledge Base beyond Income Knowledge: **Commitment Knowledge is not
-  started** and requires a separate CTO review before starting — see "Sprint 6.3B-1
-  — Income Knowledge Implementation" below. Income Knowledge itself is no longer
-  frozen; it has been authored per explicit CTO authorization.
+- Mortgage Knowledge Base beyond Income Knowledge and Commitment Knowledge: the
+  remaining domains (Property Rules, DSR Rules, Eligibility Engine, AI
+  Recommendation) require a separate CTO review before starting — see "Sprint
+  6.3B-1 — Income Knowledge Implementation" and "Sprint 6.3B-2 — Commitment
+  Knowledge Implementation" below. Income Knowledge and Commitment Knowledge are
+  no longer frozen; both have been authored per explicit CTO authorization.
 
 ## Implemented
 
@@ -108,7 +110,45 @@ first banker use AIKIM in a real loan case?" P0 order:
   before it may start. This did not lift approval for the rest of Sprint 6.3B or
   for the database PRD generally; the primary record of this authorization is in
   [mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)'s
-  Status section. Commitment Knowledge is **not started**.
+  Status section.
+- **Sprint 6.3B-2 — Commitment Knowledge Implementation**: the second implemented
+  slice of the Mortgage Knowledge Database blueprint
+  ([mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)). 1
+  new table (`commitment_recognition_rules`) — migrations authored
+  (`20260727010000_commitment_knowledge_schema.sql`,
+  `20260727020000_commitment_knowledge_rls.sql`), **not executed**; a template
+  seed (`supabase/seeds/20260727010000_commitment_knowledge_seed.sql`,
+  placeholder values only, lives outside `supabase/migrations/` by design,
+  never auto-run); a new `src/lib/commitment-knowledge/` module (matching
+  algorithm, a pure `recognizeCommitment` computation function, and a
+  Zod-validated Server Action, `computeCommitmentRecognition`); one read-only
+  function, `getCommitmentRecognitionRules(bankId?)`, in
+  `src/lib/database/commitment-knowledge.ts`. `banks`, `bank_products`,
+  `evidence`, and `derivation_results` (all built in Sprint 6.3B-1) are reused
+  as-is, unmodified — the domain-agnostic design paying off exactly as
+  intended; `recordEvidence` is not redefined for this domain either, callers
+  import it directly from `src/lib/income-knowledge/actions.ts`.
+  `commitment_recognition_rules` deliberately does not copy
+  `income_recognition_rules`' borrower-profile matching columns (see the
+  migration's header comment for why), and a commitment
+  `derivation_results.result_value` is a small object
+  (`{ recognizedAmount, isToBeSettled, settlementExclusionApplied }`), not a
+  bare number like income's — `settlementExclusionApplied` was added after a
+  security-review finding so a commitment zeroed out by the "to be settled"
+  exclusion is distinguishable in the audit trail from a genuinely-zero
+  computed value. No UI — explicitly out of scope this sprint, same as Sprint
+  6.3B-1. See [../architecture/database.md](../architecture/database.md) for
+  the table and [../architecture/security.md](../architecture/security.md) for
+  the PII-handling posture on recognized commitment figures.
+  **CTO authorization**: the CTO explicitly authorized this specific slice —
+  "Then begin Sprint 6.3B-2: Commitment Knowledge following the same
+  implementation discipline" — following the exact same Sprint 6.3B-1
+  discipline (schema+RLS migrations as separate files, TypeScript services,
+  seeder template, no UI, security review, QA, docs). The primary record of
+  this authorization is in
+  [mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)'s
+  Status section. The next domain (Property Rules or DSR Rules — whichever
+  the CTO names next) still requires a separate CTO review before starting.
 
 ## Planned
 
