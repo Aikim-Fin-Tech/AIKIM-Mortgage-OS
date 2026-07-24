@@ -64,8 +64,9 @@ The immediate next work, in the order it's actually unblockable:
 Per explicit CTO authorization recorded in
 [docs/product/roadmap.md](product/roadmap.md)'s Status section, most of this
 phase has since been implemented as the Mortgage Knowledge Database
-(Sprints 6.3A–6.3C — schema/RLS/RPC + TypeScript service layers only, no UI,
-migrations authored but not executed against the live database):
+(Sprints 6.3A–6.3C — schema/RLS/RPC + TypeScript service layers, migrations
+authored but not executed against the live database; each domain had no UI
+of its own through Sprint 6.3C — see the Alpha-001 note below):
 - Income Knowledge, Commitment Knowledge (bank/product-scoped recognition of
   income and existing commitments)
 - DSR (Debt Service Ratio) calculation
@@ -75,6 +76,21 @@ migrations authored but not executed against the live database):
 
 See [docs/product/roadmap.md](product/roadmap.md) for the sprint-by-sprint
 detail and [ADRs 0010–0014](decisions/README.md).
+
+Since these five domains were implemented, **Alpha-001 ("Mortgage
+Assessment")** has also been authored — the first UI/invocation surface for
+any of them: an orchestrating Server Action
+(`src/lib/mortgage-assessment/actions.ts`, `runMortgageAssessment`) plus a
+new "Assessment" tab on the loan case detail page, sequencing all 5 domains'
+already-existing Server Actions for one loan case against the "AIKIM
+Standard"/"Standard Mortgage" baseline
+([ADR 0015](decisions/0015-aikim-standard-baseline-seeding.md)). Zero new
+business logic — pure orchestration. Code-complete, `tsc`/`eslint`/
+`next build` clean, `security-reviewer`-passed with no findings — **not yet
+exercised against a real case**, since it depends on the same 13 Sprint
+6.3-era migrations, none of which have been executed against the live
+database yet. See [CURRENT_STATUS.md](CURRENT_STATUS.md) and
+[CHANGELOG.md](CHANGELOG.md).
 
 Still requires a fresh, explicit CTO/user scoping decision before starting:
 - **AI Recommendation** — the last remaining domain of the Mortgage

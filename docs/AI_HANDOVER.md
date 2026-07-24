@@ -25,8 +25,9 @@ PII (NRIC, income). Full vision: [docs/product/vision.md](product/vision.md).
   code), React 19.2.4, Tailwind CSS 4, Supabase (Postgres/Auth/Storage/
   PostgREST), Gemini 2.5 Pro.
 - **Build health**: `npx tsc --noEmit` and `npm run lint` are both clean on
-  the full tree, including the new Sprint 6.3 (Mortgage Knowledge Database)
-  code.
+  the full tree, including the Sprint 6.3 (Mortgage Knowledge Database) code
+  and Alpha-001 (Mortgage Assessment UI, `npm run build` also clean per
+  `security-reviewer`/`qa-engineer` review).
 - **Git**: `main` is confirmed **pushed and up to date with `origin/main`**
   (an earlier version of this document wrongly claimed it was unpushed — that
   claim was stale). Commits, oldest to newest: `d54eabf` (Initial Next.js
@@ -37,9 +38,17 @@ PII (NRIC, income). Full vision: [docs/product/vision.md](product/vision.md).
   (Mortgage Knowledge Database PRD baseline, Sprint 6.3A), `fa53682` (Income
   Knowledge, Sprint 6.3B-1), `336757d` (Commitment Knowledge, Sprint 6.3B-2),
   `aa238f7` (DSR Rules Knowledge, Sprint 6.3B-3), `7e0bb5c` (Property Rules
-  Knowledge, Sprint 6.3B-4). A further commit for the Eligibility Engine
-  (Sprint 6.3C) is landing in this same unit of work — see
-  [ADR 0014](decisions/0014-eligibility-engine-implementation.md).
+  Knowledge, Sprint 6.3B-4), `a644295` (Eligibility Engine, Sprint 6.3C,
+  closing Sprint 6.3 — see
+  [ADR 0014](decisions/0014-eligibility-engine-implementation.md)). An
+  earlier version of this document described that last commit as still
+  landing; it has since landed and is corrected here. Two further
+  migrations (a partial-unique-index correction and the AIKIM Standard
+  baseline seed — [ADR 0015](decisions/0015-aikim-standard-baseline-seeding.md))
+  and a new orchestrating feature, **Alpha-001 ("Mortgage Assessment")** —
+  see "What's Actually Built" below — have also been authored since
+  `a644295`; none of this has a confirmed commit hash as of this
+  documentation pass.
 - **Database**: **6 of the original 8 authored migrations have been executed
   against the live database**, in order, confirmed directly by the user in the
   Supabase SQL Editor: `create_loan_case_rpc`, `document_management_mvp`,
@@ -49,12 +58,18 @@ PII (NRIC, income). Full vision: [docs/product/vision.md](product/vision.md).
   The schema described for those 6 files is now live, but **no real mortgage
   rule data has been seeded yet** (`mortgage_rules` is schema-only, zero
   rows) and `document_types.ocr_kind` has not been set on any actual row.
-  Separately, **11 further migrations for the Mortgage Knowledge Database**
+  Separately, **13 further migrations for the Mortgage Knowledge Database**
   (Sprints 6.3A–6.3C: Income Knowledge, Commitment Knowledge, DSR Rules
   Knowledge, Property Rules Knowledge, Eligibility Engine — 10 new tables plus
-  one new RPC, `create_eligibility_verdict`) have been authored and **none
-  have been executed against the live database yet** — all pending manual
-  review and execution in the Supabase SQL Editor.
+  one new RPC, `create_eligibility_verdict`; plus 2 later migrations, a
+  partial-unique-index correction and the AIKIM Standard baseline seed —
+  [ADR 0015](decisions/0015-aikim-standard-baseline-seeding.md)) have been
+  authored and **none have been executed against the live database yet** —
+  all pending manual review and execution in the Supabase SQL Editor. A new
+  UI, **Alpha-001 ("Mortgage Assessment")**, now exists to invoke all five
+  domains together for one loan case (see "What's Actually Built" below),
+  but it depends on these same migrations and has not been exercised
+  against a real case either.
 - **Deployment**: none. Not hosted anywhere.
 - **AI (Gemini)**: package installed, API key configured, pipeline verified
   end-to-end with synthetic test fixtures — but blocked on Gemini billing for
@@ -74,21 +89,39 @@ abandoned), OCR (NRIC + salary slip via Gemini, behind a swappable
 (7 states), Case Timeline, Checklist Progress, rule-based Next Action Card,
 Loan Health Score (no AI).
 
-**Mortgage Knowledge Database (Sprints 6.3A–6.3C) — backend/schema only, no
-UI, migrations authored but not executed against the live database**: Income
-Knowledge, Commitment Knowledge, DSR Rules Knowledge, and Property Rules
-Knowledge (each a TypeScript matching/computation module plus one new rule
-table, reusing shared `banks`/`bank_products`/`evidence`/`derivation_results`
-tables introduced in Sprint 6.3B-1); and the Eligibility Engine (Sprint
-6.3C) — the first Decision Knowledge domain, combining DSR and Property
-Rules outputs into a per-case, per-bank-product verdict via a new
-`SECURITY INVOKER` RPC, `create_eligibility_verdict` (the second multi-table
-RPC in this codebase after `create_loan_case`). See
-[ADRs 0010–0014](decisions/README.md) and
+**Mortgage Knowledge Database (Sprints 6.3A–6.3C) — schema authored but not
+executed against the live database**: Income Knowledge, Commitment
+Knowledge, DSR Rules Knowledge, and Property Rules Knowledge (each a
+TypeScript matching/computation module plus one new rule table, reusing
+shared `banks`/`bank_products`/`evidence`/`derivation_results` tables
+introduced in Sprint 6.3B-1); and the Eligibility Engine (Sprint 6.3C) — the
+first Decision Knowledge domain, combining DSR and Property Rules outputs
+into a per-case, per-bank-product verdict via a new `SECURITY INVOKER` RPC,
+`create_eligibility_verdict` (the second multi-table RPC in this codebase
+after `create_loan_case`). See [ADRs 0010–0014](decisions/README.md) and
 [mortgage-knowledge-database-prd.md](product/mortgage-knowledge-database-prd.md).
 The only remaining domain of this PRD's 11-table blueprint, **AI
 Recommendation, has not been started** and requires a separate CTO/user
 review before any work begins.
+
+**Alpha-001 ("Mortgage Assessment") — the first UI/invocation surface for
+any of the five domains above**: `src/lib/mortgage-assessment/actions.ts`
+(`runMortgageAssessment`, an orchestrating Server Action sequencing all 5
+domains' already-existing Server Actions in one call — record evidence,
+income recognition, commitment recognition, DSR, property rules,
+eligibility verdict — for one loan case against the "AIKIM
+Standard"/"Standard Mortgage" baseline resolved by name lookup, no picker;
+see [ADR 0015](decisions/0015-aikim-standard-baseline-seeding.md)) plus a
+new "Assessment" tab on the loan case detail page
+(`src/app/(app)/loan-cases/[id]/assessment/page.tsx`,
+`src/components/loan-cases/assessment/AssessmentForm.tsx`). Zero new
+business logic — pure orchestration reusing every already-implemented
+domain function as-is, bailing out and naming the exact failed step on the
+first error. Code-complete, `tsc`/`eslint`/`next build` clean,
+`security-reviewer`-passed with no findings — **but not yet exercised
+against a real case**, since the 13 migrations above (which create every
+table these 5 domains and this orchestrator depend on) have not been run
+against the live database.
 
 Full module-by-module breakdown: [CURRENT_STATUS.md](CURRENT_STATUS.md) and
 [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md).
@@ -102,8 +135,10 @@ Recommendation (the last domain of the Mortgage Knowledge Database's
 review), automated tests, CI/CD, deployment. Income Knowledge, Commitment
 Knowledge, DSR Rules Knowledge, Property Rules Knowledge, and the
 Eligibility Engine now exist as backend code + authored migrations (see
-above) but have **no UI** and are **not executed against the live
-database**.
+above), invocable together via the new Alpha-001 Mortgage Assessment tab
+(no dedicated UI of their own), and are **not executed against the live
+database** — so Alpha-001 itself has not been exercised against a real case
+yet either.
 
 **Never previously part of this project at all — treat as entirely new scope
 if ever requested**: n8n, Supabase Edge Functions, MCP as a product feature.
@@ -175,10 +210,12 @@ Full reasoning for each: [docs/decisions/](decisions/README.md).
 In order (full detail: [ROADMAP.md](ROADMAP.md)):
 1. ~~Human executes the pending migrations.~~ **Partially done** — 6 of the
    original 8 are executed against the live DB (2 early draft files
-   superseded, intentionally not run). **Still pending**: all 11 Sprint 6.3
-   Mortgage Knowledge Database migrations (Income, Commitment, DSR Rules,
-   Property Rules, Eligibility Engine) are authored and awaiting human
-   review and execution.
+   superseded, intentionally not run). **Still pending**: all 13 Sprint
+   6.3-era Mortgage Knowledge Database migrations (Income, Commitment, DSR
+   Rules, Property Rules, Eligibility Engine, plus the later index-
+   correction and AIKIM Standard baseline seed migrations) are authored and
+   awaiting human review and execution — this also blocks Alpha-001
+   (Mortgage Assessment) from being exercised against a real case.
 2. Resolve Gemini billing.
 3. Product decisions: Dashboard bucket definitions, WhatsApp provider.
 4. Seed real mortgage rule data.
@@ -191,8 +228,10 @@ In order (full detail: [ROADMAP.md](ROADMAP.md)):
    — the last remaining domain of the Mortgage Knowledge Database's
    11-table blueprint. DSR, eligibility, and Income/Commitment/Property
    Rules Knowledge are no longer out of scope — all five have been
-   implemented (backend/schema only, no UI) per explicit CTO authorization;
-   see [mortgage-knowledge-database-prd.md](product/mortgage-knowledge-database-prd.md).
+   implemented per explicit CTO authorization, and are now also invocable
+   together via Alpha-001, the Mortgage Assessment tab (see "What's
+   Actually Built" above); see
+   [mortgage-knowledge-database-prd.md](product/mortgage-knowledge-database-prd.md).
 
 ## ✔ Where Everything Else Lives
 

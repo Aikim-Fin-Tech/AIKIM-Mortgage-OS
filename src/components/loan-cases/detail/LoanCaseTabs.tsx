@@ -3,6 +3,7 @@ import Link from "next/link";
 const TABS = [
   { key: "overview", label: "Overview", hrefSuffix: "" },
   { key: "documents", label: "Documents", hrefSuffix: "/documents" },
+  { key: "assessment", label: "Assessment", hrefSuffix: "/assessment" },
 ] as const;
 
 export function LoanCaseTabs({
@@ -10,7 +11,7 @@ export function LoanCaseTabs({
   active,
 }: {
   caseNumber: string;
-  active: "overview" | "documents";
+  active: "overview" | "documents" | "assessment";
 }) {
   return (
     <div className="mt-6 border-b border-slate-200">

@@ -18,16 +18,36 @@ fa53682 feat: implement Income Knowledge (Sprint 6.3B-1)
 336757d feat: implement Commitment Knowledge (Sprint 6.3B-2)
 aa238f7 feat: implement DSR Rules Knowledge (Sprint 6.3B-3)
 7e0bb5c feat: implement Property Rules Knowledge (Sprint 6.3B-4)
+a644295 feat: implement Eligibility Engine (Sprint 6.3C), close Sprint 6.3
 ```
 
-10 commits exist as of this pass. `main` is confirmed **pushed and up to
+11 commits exist as of this pass. `main` is confirmed **pushed and up to
 date with `origin/main`** — an earlier version of this document wrongly
 claimed `6f73121` was unpushed; that claim was stale and is corrected here.
-A further commit — **Sprint 6.3C, Eligibility Engine Implementation** — is
-being finalized in this same unit of work (schema, RLS, RPC, service layer,
-[ADR 0014](decisions/0014-eligibility-engine-implementation.md)); its final
-commit hash is not yet assigned as of this documentation pass, so it is not
-listed in the `git log` block above.
+An earlier version of this document also described the Eligibility Engine
+commit as still being finalized, with no hash yet assigned; it has since
+landed as `a644295` (added to the `git log` block above and to the
+Commit-by-Commit Breakdown below in this pass) — see
+[ADR 0014](decisions/0014-eligibility-engine-implementation.md).
+
+Since that commit landed, two further items have been authored
+but are not yet reflected as their own commit-by-commit table rows below
+(no confirmed commit hash as of this pass): (1) two further migrations,
+`20260730040000_knowledge_rule_index_correction.sql` and
+`20260731010000_aikim_standard_baseline_seed.sql` — added to the Migration
+Files list below in this pass, which previously omitted both — see
+[ADR 0015](decisions/0015-aikim-standard-baseline-seeding.md); and (2)
+**Alpha-001 ("Mortgage Assessment")** — the first UI/invocation surface for
+the Mortgage Knowledge Database: an orchestrating Server Action
+(`src/lib/mortgage-assessment/actions.ts`, `runMortgageAssessment`) that
+sequences the 5 already-existing domain Server Actions (Income, Commitment,
+DSR, Property Rules, Eligibility) for one loan case against the "AIKIM
+Standard"/"Standard Mortgage" baseline, plus a new "Assessment" tab on the
+loan case detail page. Zero new business logic — pure orchestration.
+Code-complete, `tsc`/`eslint`/`next build` clean, `security-reviewer`-passed
+with no findings — **not yet exercised against a real case**, since the
+tables its 5 domain calls depend on are not yet live (see Migration Files
+below).
 
 ## Commit-by-Commit Breakdown
 
@@ -43,14 +63,16 @@ listed in the `git log` block above.
 | 8 | `336757d` | Sprint 6.3B-2 — Commitment Knowledge Implementation. 1 new table (`commitment_recognition_rules`); `src/lib/commitment-knowledge/`; no UI | [0011](decisions/0011-commitment-knowledge-implementation.md) |
 | 9 | `aa238f7` | Sprint 6.3B-3 — DSR Rules Knowledge Implementation. 1 new table (`dsr_rules`); `src/lib/dsr-knowledge/`; no UI | [0012](decisions/0012-dsr-knowledge-implementation.md) |
 | 10 | `7e0bb5c` | Sprint 6.3B-4 — Property Rules Knowledge Implementation. 1 new table (`property_rules`); `src/lib/property-rules-knowledge/`; no UI | [0013](decisions/0013-property-rules-knowledge-implementation.md) |
-| 11 | *(pending)* | Sprint 6.3C — Eligibility Engine Implementation. 2 new tables (`eligibility_verdicts`, `eligibility_verdict_derivation_results`) plus a new `SECURITY INVOKER` RPC, `create_eligibility_verdict` (this codebase's second multi-table RPC after `create_loan_case`); `src/lib/eligibility-engine/`; no UI | [0014](decisions/0014-eligibility-engine-implementation.md) |
+| 11 | `a644295` | Sprint 6.3C — Eligibility Engine Implementation. 2 new tables (`eligibility_verdicts`, `eligibility_verdict_derivation_results`) plus a new `SECURITY INVOKER` RPC, `create_eligibility_verdict` (this codebase's second multi-table RPC after `create_loan_case`); `src/lib/eligibility-engine/`; no dedicated UI at the time — see the Alpha-001 note above the Commit History block, and the "5 domains have no UI" correction below | [0014](decisions/0014-eligibility-engine-implementation.md) |
 
 ## Migration Files (chronological)
 
-All 19 migration files authored to date, in order. **Only the 6 marked
-"Executed" have been run against the live database** — every other file
-(including all 11 Sprint 6.3 files) is authored SQL only, pending manual
-human review and execution in the Supabase SQL Editor. See
+All 21 migration files authored to date, in order (items 20–21 were
+authored after the rest of this list but were omitted from it until this
+pass — corrected here). **Only the 6 marked "Executed" have been run
+against the live database** — every other file (including all 13
+Sprint-6.3-era files) is authored SQL only, pending manual human review and
+execution in the Supabase SQL Editor. See
 [docs/architecture/database.md](architecture/database.md).
 
 1. `20260716000000_loan_case_creation.sql` — Superseded, never run
@@ -72,6 +94,8 @@ human review and execution in the Supabase SQL Editor. See
 17. `20260730010000_eligibility_engine_schema.sql` — Not executed
 18. `20260730020000_eligibility_engine_rls.sql` — Not executed
 19. `20260730030000_eligibility_engine_rpc.sql` — Not executed
+20. `20260730040000_knowledge_rule_index_correction.sql` — Not executed
+21. `20260731010000_aikim_standard_baseline_seed.sql` — Not executed
 
 ## Notable Reversals / Corrections
 
@@ -114,3 +138,10 @@ human review and execution in the Supabase SQL Editor. See
   correctness) was explicitly accepted, not fixed. See
   [ADR 0014](decisions/0014-eligibility-engine-implementation.md) and
   [docs/architecture/security.md](architecture/security.md).
+- **This document's Migration Files list previously omitted 2 already-
+  authored files** — `20260730040000_knowledge_rule_index_correction.sql`
+  and `20260731010000_aikim_standard_baseline_seed.sql` — corrected in this
+  pass. Separately, the "5 domains have no UI" framing used elsewhere in
+  this project's docs is now stale: Alpha-001 ("Mortgage Assessment") gives
+  all 5 a single orchestrating invocation surface, though none has a
+  dedicated UI of its own.
