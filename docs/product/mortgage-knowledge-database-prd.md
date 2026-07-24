@@ -1,12 +1,13 @@
 # Mortgage Knowledge Database PRD
 
-Status: **Draft blueprint; CTO-approved for Sprint 6.3B-1 (Income Knowledge) and
-Sprint 6.3B-2 (Commitment Knowledge) only, both of which have been implemented
-(code authored, not executed) — see the "Sprint 6.3B-1 authorization" and
-"Sprint 6.3B-2 authorization" updates in the Status section below. Every other
-domain in this document (Property Rules, DSR Rules, Eligibility Engine, AI
-Recommendation) remains awaiting a separate CTO review before any further SQL or
-migration work begins.**
+Status: **Draft blueprint; CTO-approved for Sprint 6.3B-1 (Income Knowledge),
+Sprint 6.3B-2 (Commitment Knowledge), and Sprint 6.3B-3 (DSR Rules Knowledge)
+only, all of which have been implemented (code authored, not executed) — see
+the "Sprint 6.3B-1 authorization", "Sprint 6.3B-2 authorization", and
+"Sprint 6.3B-3 authorization" updates in the Status section below. Every
+other domain in this document (Property Rules, Eligibility Engine, AI
+Recommendation) remains awaiting a separate CTO review before any further
+SQL or migration work begins.**
 Version: 1.0
 Date: 2026-07-23
 Author: supabase-architect (Sprint 6.3, Day 3 of the same scoping exercise)
@@ -445,7 +446,7 @@ commitment Evidence, for DSR purposes.
 | `rule_name` | text | |
 | `max_dsr_percentage` | decimal, nullable | The maximum ratio this bank/product allows. Not populated with a real figure by this document — requires real bank policy input. |
 | `stress_test_rate_buffer_percentage` | decimal, nullable | An interest-rate buffer applied to the proposed instalment before computing the numerator, if this bank practices it. Not asserted here. |
-| `income_tier_lower_bound` / `income_tier_upper_bound` | decimal, nullable | For income-tier-based threshold variation, if any bank applies it. Not asserted here. |
+| `income_tier_lower_bound` / `income_tier_upper_bound` | decimal, nullable | For income-tier-based threshold variation, if any bank applies it. Not asserted here. **Implemented as a half-open numeric range test** (`lower IS NULL OR income >= lower` AND `upper IS NULL OR income < upper`), not a wildcard-equality match — see Sprint 6.3B-3's implementation note below and [0012](../decisions/0012-dsr-knowledge-implementation.md). |
 | `description` | text, nullable | |
 | `version` | integer, default 1 | |
 | `is_active` | boolean, default true | |
@@ -579,7 +580,16 @@ per the PRD's model 9 attribute list and
   dimension (bank/product) than it matches on today. No new matching
   mechanism is proposed; Sprint 6.3B, if approved, would extend
   `match-rule.ts`'s existing function (or a close sibling of it) rather than
-  invent a second one.
+  invent a second one. **Exception, added at Sprint 6.3B-3**: `dsr_rules`'
+  third matching dimension (`income_tier_lower_bound`/`income_tier_upper_bound`)
+  is a numeric range test, not a wildcard-equality dimension — see Section
+  3.6 and [0012](../decisions/0012-dsr-knowledge-implementation.md). The
+  "fewest wildcards wins" algorithm as originally described applies to
+  `bank_id`/`bank_product_id` scoping for every rule table including
+  `dsr_rules`; it does not by itself describe how the income-tier range
+  participates in specificity ordering — that is left to the future
+  `src/lib/dsr-knowledge/match-dsr-rule.ts` implementation, not resolved
+  here.
 - **`evidence` belongs to a `loan_case`, optionally traces to a `document`
   and a `document_extraction`.** A single loan case has many Evidence rows,
   accumulated over the life of the case as documents are OCR'd or facts are
@@ -1101,3 +1111,43 @@ Knowledge only — it does **not** extend to Property Rules, DSR Rules, the
 Eligibility Engine, or AI Recommendation. The next domain (Property Rules or
 DSR Rules — whichever the CTO names next) still requires a separate CTO
 review before it may start, and is not started as of this update.
+
+**Sprint 6.3B-3 authorization**: per explicit CTO instruction in
+conversation ("Sprint 6.3B-3: DSR Rules Knowledge Implementation. CTO-
+authorized in conversation, same discipline as Sprint 6.3B-1 (Income) and
+6.3B-2 (Commitment)"), the CTO authorized the next specific, narrower slice
+of Sprint 6.3B: DSR Rules Knowledge only — the `dsr_rules` table (Section
+3.6). Delivered with the same full-pipeline discipline as Sprint
+6.3B-1/6.3B-2: schema migration, then the companion RLS migration, then a
+TypeScript matcher/computation/Server Action layer, then a template seed
+kept separate from migrations — no UI, same as both prior slices. `banks`,
+`bank_products`, `evidence`, and `derivation_results` — all built in Sprint
+6.3B-1 — are reused as-is, unmodified; `derivation_results.domain` already
+accepted `'dsr'` as of that migration, so no change to it was needed. That
+work has been delivered — migrations authored in
+`supabase/migrations/20260728010000_dsr_knowledge_schema.sql` and
+`supabase/migrations/20260728020000_dsr_knowledge_rls.sql` (both
+**authored, not executed**, per this codebase's Migration Policy — no agent
+ever executes a migration), a template seed in
+`supabase/seeds/20260728010000_dsr_knowledge_seed.sql` (with
+`max_dsr_percentage`/`stress_test_rate_buffer_percentage` deliberately left
+`NULL` — unlike Income/Commitment Knowledge's seed templates, no safe
+illustrative numeric value exists for DSR's core figures), and a new
+`src/lib/dsr-knowledge/` module (`types.ts`, the range-matching
+`match-dsr-rule.ts`, the pure `compute-dsr.ts`, and the
+`computeDsrForCase` Server Action in `actions.ts`, which reads
+`derivation_results` rows produced by Income/Commitment Recognition —
+never raw `evidence` — as its inputs) plus one read-only function,
+`getDsrRules(bankId?)`, in `src/lib/database/dsr-knowledge.ts`. See
+[../architecture/database.md](../architecture/database.md) for the table and
+[0012](../decisions/0012-dsr-knowledge-implementation.md) for the
+implementation decisions, including this table's numeric-range matching
+shape (`income_tier_lower_bound`/`income_tier_upper_bound`), which is new to
+this Knowledge Base and does not follow the wildcard-equality convention
+every other rule table's matching columns use. This paragraph reports the
+CTO's own authorization; it is the CTO's decision, not one this document,
+any agent, or any other doc asserted on its own authority. This
+authorization is scoped to Sprint 6.3B-3 / DSR Rules Knowledge only — it
+does **not** extend to Property Rules, the Eligibility Engine, or AI
+Recommendation. The next domain still requires a separate CTO review before
+it may start, and is not started as of this update.

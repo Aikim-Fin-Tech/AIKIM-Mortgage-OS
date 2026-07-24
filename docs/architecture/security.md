@@ -51,20 +51,24 @@ treat them as sufficient on their own. See
 - IC numbers are excluded from the customer picker and from global search.
 - Never log full RPC payloads, secrets, tokens, cookies, or raw NRIC numbers — error
   code/message only.
-- **Recognized income and commitment figures (Sprint 6.3B-1 Income Knowledge,
-  Sprint 6.3B-2 Commitment Knowledge)**: `evidence.value` and
-  `derivation_results.result_value` (raw and recognized income amounts; raw and
-  recognized commitment amounts) are shown unmasked to any RLS-permitted staff
+- **Recognized income, commitment, and DSR figures (Sprint 6.3B-1 Income
+  Knowledge, Sprint 6.3B-2 Commitment Knowledge, Sprint 6.3B-3 DSR Rules
+  Knowledge)**: `evidence.value` and `derivation_results.result_value` — raw
+  and recognized income amounts; raw and recognized commitment amounts; and,
+  for `domain = 'dsr'` rows, the aggregate figures `dsrRatio`,
+  `totalRecognizedIncome`, `totalRecognizedCommitments`, and
+  `proposedInstalmentAmount` — are shown unmasked to any RLS-permitted staff
   role — the same posture already applied to `loan_cases.loan_amount` and other
   financial figures staff need to underwrite a case. This is a recorded decision,
   made explicitly during Sprint 6.3B-1's docs pass (a `security-reviewer` pass
   flagged it as a real open question, not something silently always true) and
-  confirmed to apply identically to Sprint 6.3B-2's commitment figures under the
-  same policy: masking in this codebase is reserved for government-ID-class
-  identifiers (NRIC/IC), not general financial figures. `evidence`/
-  `derivation_results` access is still gated by RLS
-  (`20260726020000_income_knowledge_rls.sql`,
-  `20260727020000_commitment_knowledge_rls.sql`) — this decision is about display
+  confirmed to apply identically to Sprint 6.3B-2's commitment figures and
+  Sprint 6.3B-3's DSR figures under the same policy: masking in this codebase
+  is reserved for government-ID-class identifiers (NRIC/IC), not general
+  financial figures. `evidence`/`derivation_results` access is still gated by
+  RLS (`20260726020000_income_knowledge_rls.sql`,
+  `20260727020000_commitment_knowledge_rls.sql`,
+  `20260728020000_dsr_knowledge_rls.sql`) — this decision is about display
   formatting to an already-authorized viewer, not about widening who can see the row
   at all.
 

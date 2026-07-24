@@ -38,12 +38,15 @@ first banker use AIKIM in a real loan case?" P0 order:
   executed**. See [../decisions/0007-mortgage-rule-admin.md](../decisions/0007-mortgage-rule-admin.md).
 - Rule Version UI, further admin enhancements, Advanced Rule Engine work, Event
   History UI — none started beyond what Phase 2 already shipped.
-- Mortgage Knowledge Base beyond Income Knowledge and Commitment Knowledge: the
-  remaining domains (Property Rules, DSR Rules, Eligibility Engine, AI
+- Mortgage Knowledge Base beyond Income Knowledge, Commitment Knowledge, and DSR
+  Rules Knowledge: the remaining domains (Property Rules, Eligibility Engine, AI
   Recommendation) require a separate CTO review before starting — see "Sprint
-  6.3B-1 — Income Knowledge Implementation" and "Sprint 6.3B-2 — Commitment
-  Knowledge Implementation" below. Income Knowledge and Commitment Knowledge are
-  no longer frozen; both have been authored per explicit CTO authorization.
+  6.3B-1 — Income Knowledge Implementation", "Sprint 6.3B-2 — Commitment
+  Knowledge Implementation", and "Sprint 6.3B-3 — DSR Rules Knowledge
+  Implementation" below. Income Knowledge, Commitment Knowledge, and DSR Rules
+  Knowledge are no longer frozen; all three have been authored per explicit CTO
+  authorization. Property Rules is the next domain still requiring a separate
+  CTO review before it may start.
 
 ## Implemented
 
@@ -147,8 +150,53 @@ first banker use AIKIM in a real loan case?" P0 order:
   seeder template, no UI, security review, QA, docs). The primary record of
   this authorization is in
   [mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)'s
-  Status section. The next domain (Property Rules or DSR Rules — whichever
-  the CTO names next) still requires a separate CTO review before starting.
+  Status section.
+- **Sprint 6.3B-3 — DSR Rules Knowledge Implementation**: the third implemented
+  slice of the Mortgage Knowledge Database blueprint
+  ([mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)). 1
+  new table (`dsr_rules`) — migrations authored
+  (`20260728010000_dsr_knowledge_schema.sql`,
+  `20260728020000_dsr_knowledge_rls.sql`), **not executed**; a template seed
+  (`supabase/seeds/20260728010000_dsr_knowledge_seed.sql`,
+  `max_dsr_percentage`/`stress_test_rate_buffer_percentage` deliberately left
+  `NULL` — unlike Income/Commitment Knowledge's seed templates, no safe
+  illustrative numeric value exists for DSR's core figures — lives outside
+  `supabase/migrations/` by design, never auto-run); a new
+  `src/lib/dsr-knowledge/` module (`match-dsr-rule.ts` — a genuinely new
+  matching shape, a half-open numeric RANGE test on
+  `income_tier_lower_bound`/`income_tier_upper_bound` rather than the
+  equality-wildcard test every prior matcher uses; `compute-dsr.ts` — a pure
+  function computing the DSR ratio from caller-supplied
+  `totalRecognizedIncome`/`totalRecognizedCommitments`/
+  `proposedInstalmentAmount`, deliberately not computing an
+  amortization/stress-tested instalment itself, since `loan_cases` has no
+  tenure/rate columns; and the `computeDsrForCase` Server Action in
+  `actions.ts`); one read-only function, `getDsrRules(bankId?)`, in
+  `src/lib/database/dsr-knowledge.ts`. `banks`, `bank_products`, `evidence`,
+  and `derivation_results` (all built in Sprint 6.3B-1) are reused as-is,
+  unmodified — `derivation_results.domain` already accepted `'dsr'`. Unlike
+  Income and Commitment Recognition, `computeDsrForCase` reads
+  `derivation_results` rows (Income/Commitment Recognition's own outputs),
+  never raw `evidence`, and inserts a `dsr`-domain `derivation_results` row
+  with `input_evidence_ids: []` — the contributing derivation results' ids
+  are recorded inside `result_value.incomeDerivationResultIds` /
+  `result_value.commitmentDerivationResultIds` instead, since the normal
+  `input_evidence_ids` column doesn't fit DSR's actual input shape. No
+  UI — explicitly out of scope this sprint, same as Sprint 6.3B-1/6.3B-2. See
+  [../architecture/database.md](../architecture/database.md) for the table
+  and [../architecture/security.md](../architecture/security.md) for the
+  PII-handling posture on DSR's aggregate figures.
+  **CTO authorization**: the CTO explicitly authorized this specific slice —
+  "Sprint 6.3B-3: DSR Rules Knowledge Implementation... same discipline as
+  Sprint 6.3B-1 (Income) and 6.3B-2 (Commitment)" — following the exact same
+  full-pipeline discipline as both prior slices (schema+RLS migrations as
+  separate files, TypeScript matcher/computation/Server Action, seeder
+  template, no UI, security review, QA, docs). The primary record of this
+  authorization is in
+  [mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)'s
+  Status section and [0012](../decisions/0012-dsr-knowledge-implementation.md).
+  The next domain (Property Rules) still requires a separate CTO review
+  before starting.
 
 ## Planned
 
