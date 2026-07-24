@@ -38,6 +38,7 @@ session strategy, a new architectural pattern.
 | [0011](0011-commitment-knowledge-implementation.md) | Commitment Knowledge Implementation — Sprint 6.3B-2 | Proposed (migrations authored, not confirmed run) |
 | [0012](0012-dsr-knowledge-implementation.md) | DSR Rules Knowledge Implementation — Sprint 6.3B-3 | Proposed (migrations authored, not confirmed run) |
 | [0013](0013-property-rules-knowledge-implementation.md) | Property Rules Knowledge Implementation — Sprint 6.3B-4 | Proposed (migrations authored, not confirmed run) |
+| [0014](0014-eligibility-engine-implementation.md) | Eligibility Engine Implementation — Sprint 6.3C | Proposed (migrations authored, not confirmed run) |
 
 "Retroactive" means the decision was already implemented in the codebase before this
 ADR was written; the ADR documents evidence found in code, it does not introduce a

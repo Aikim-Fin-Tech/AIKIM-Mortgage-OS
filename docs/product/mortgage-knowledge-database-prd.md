@@ -1,14 +1,15 @@
 # Mortgage Knowledge Database PRD
 
 Status: **Draft blueprint; CTO-approved for Sprint 6.3B-1 (Income Knowledge),
-Sprint 6.3B-2 (Commitment Knowledge), Sprint 6.3B-3 (DSR Rules Knowledge), and
-Sprint 6.3B-4 (Property Rules Knowledge) only, all of which have been
-implemented (code authored, not executed) — see the "Sprint 6.3B-1
-authorization", "Sprint 6.3B-2 authorization", "Sprint 6.3B-3 authorization",
-and "Sprint 6.3B-4 authorization" updates in the Status section below. Every
-remaining domain in this document (Eligibility Engine, AI Recommendation)
-remains awaiting a separate CTO review before any further SQL or migration
-work begins.**
+Sprint 6.3B-2 (Commitment Knowledge), Sprint 6.3B-3 (DSR Rules Knowledge),
+Sprint 6.3B-4 (Property Rules Knowledge), and Sprint 6.3C (Eligibility
+Engine) only, all of which have been implemented (code authored, not
+executed) — see the "Sprint 6.3B-1 authorization", "Sprint 6.3B-2
+authorization", "Sprint 6.3B-3 authorization", "Sprint 6.3B-4 authorization",
+and "Sprint 6.3C authorization" updates in the Status section below.
+`ai_recommendations` is now the only table in this document's 11-table
+blueprint that does not yet exist; it still requires a separate CTO review
+before any further SQL or migration work begins.**
 Version: 1.0
 Date: 2026-07-23
 Author: supabase-architect (Sprint 6.3, Day 3 of the same scoping exercise)
@@ -1220,3 +1221,93 @@ remaining unimplemented tables are `eligibility_verdicts`,
 domain (Eligibility Engine, or whichever domain the CTO names next) still
 requires a separate CTO review before it may start, and is not started as
 of this update.
+
+**Sprint 6.3C authorization**: per explicit CTO instruction in conversation
+("Eligibility Engine Implementation, same discipline as Sprint 6.3B-1
+through 6.3B-4"), the CTO authorized the next slice of this blueprint:
+Eligibility Engine — the `eligibility_verdicts` and
+`eligibility_verdict_derivation_results` tables (Section 3.9, 3.10). Note
+the naming: the CTO named this slice "6.3C," not "6.3B-5" — marking it as a
+meaningfully different phase from the prior four, since it is the first
+**Decision Knowledge** domain implemented (Section 3's ontology concept
+#10), rather than another Derivation/Computation Knowledge slice like
+Income, Commitment, DSR, or Property Rules. Delivered with the same
+full-pipeline discipline as all four prior slices, plus one genuinely new
+kind of deliverable this domain required: schema migration, then the
+companion RLS migration, then a third migration authoring the
+`create_eligibility_verdict` RPC — the first `SECURITY INVOKER` RPC in this
+Knowledge Base since `create_loan_case`
+([0004](../decisions/0004-atomic-multitable-writes-via-security-invoker-rpc.md)),
+needed because creating one verdict means writing to two tables atomically
+— then the TypeScript layer, with no UI. **No seeder this sprint** — unlike
+every prior slice, this domain produces computed decisions, not
+reference/policy data, so there is nothing to seed. `banks`, `bank_products`,
+`evidence`, and `derivation_results` — all built in Sprint 6.3B-1 — are
+reused as-is, unmodified. That work has been delivered — migrations
+authored in
+`supabase/migrations/20260730010000_eligibility_engine_schema.sql`,
+`supabase/migrations/20260730020000_eligibility_engine_rls.sql`, and
+`supabase/migrations/20260730030000_eligibility_engine_rpc.sql` (all
+**authored, not executed**, per this codebase's Migration Policy — no agent
+ever executes a migration), and a new `src/lib/eligibility-engine/` module
+(`types.ts`, the pure `compute-eligibility.ts`, and the
+`computeEligibilityForCase` Server Action in `actions.ts` — the first
+Server Action in this series to write via an RPC,
+`supabase.rpc("create_eligibility_verdict", ...)`, rather than a plain
+`.insert()`) plus one read-only function,
+`getEligibilityVerdictsForCase(loanCaseId, bankProductId?)`, in
+`src/lib/database/eligibility-engine.ts`. `verdict` is a definitively
+closed 3-value set (`eligible`\|`not_eligible`\|`eligible_with_conditions`),
+CHECK-constrained, unlike this Knowledge Base's usual open-vocabulary
+matching columns; `eligibility_verdict_derivation_results.derivation_result_id`
+is a real, enforced foreign key to `derivation_results` — a deliberate
+contrast with `derivation_results.rule_id`'s non-FK polymorphic reference,
+since this join has exactly one target table, already live. Both tables are
+append-only with **no UPDATE/DELETE RLS policy at all** — stronger than the
+deactivate-only pattern the rule tables use, per Section 6's "Frozen
+Decision Principle." `computeEligibility` combines a DSR pass/fail result
+and Property Rules' margin-of-finance/tenure ceilings (both read from
+existing `derivation_results` rows) against two external, caller-supplied
+inputs — `propertyValue` and `requestedTenureYears`, since `loan_cases` has
+no such columns, the same external-input boundary DSR drew around its
+proposed instalment figure ([0012](../decisions/0012-dsr-knowledge-implementation.md))
+— into a verdict plus a structured `reasons` array (`check`/`result`/
+`detail`/optional `value`/`threshold` fields per reason, not free text, so
+each is genuinely machine-inspectable).
+
+A security-review pass found two real findings, **both fixed** before this
+work was considered complete — unlike Sprint 6.3B-4's one-fixed-one-accepted
+outcome:
+
+1. **(High severity)** The RPC's only original guard on
+   `p_derivation_result_ids` was a bare foreign-key existence check, which is
+   not subject to RLS on the referenced table — a caller invoking the RPC
+   directly (bypassing the TypeScript layer) could have linked a
+   `derivation_results` row from a completely unrelated case into a
+   verdict's reasoning chain. Fixed by adding a scoped `SELECT` (subject to
+   RLS) verifying each id belongs to the case/product being evaluated,
+   mirroring `create_loan_case`'s existing "validate by selecting it back"
+   pattern. An explicit, deliberately accepted remaining trust boundary was
+   documented alongside the fix: the RPC now verifies referential *scope*,
+   but still trusts `p_verdict`/`p_reasons` *content* from the caller —
+   recomputing the verdict itself in SQL would reverse this Knowledge Base's
+   established "matching/derivation logic lives in TypeScript, not SQL"
+   architecture (ADR 0006 and every subsequent domain ADR), so that boundary
+   is accepted and recorded, not fixed.
+2. **(Medium severity)** `compute-eligibility.ts` originally dropped raw
+   caller-supplied inputs (`propertyValue`, `requestedLoanAmount`,
+   `requestedTenureYears`) from some `reasons` branches, making some
+   verdicts non-reconstructable later. Fixed by ensuring every branch of
+   every check captures its raw inputs, regardless of outcome.
+
+See [../architecture/database.md](../architecture/database.md) for both
+tables and [../architecture/security.md](../architecture/security.md) for
+the durable, generalized record of the RPC-scope-validation finding above.
+No UI — explicitly out of scope this sprint, same as every prior slice.
+This paragraph reports the CTO's own authorization; it is the CTO's
+decision, not one this document, any agent, or any other doc asserted on
+its own authority. This authorization is scoped to Sprint 6.3C /
+Eligibility Engine only — it does **not** extend to AI Recommendation.
+With Eligibility Engine now implemented, `ai_recommendations` is the only
+remaining table in this document's 11-table blueprint that does not yet
+exist, and it still requires a separate CTO review before it may start.

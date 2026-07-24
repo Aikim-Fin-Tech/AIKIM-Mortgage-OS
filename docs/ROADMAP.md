@@ -59,14 +59,27 @@ The immediate next work, in the order it's actually unblockable:
 - Document verify/reject workflow
 - Linking checklist completion to automatic stage transitions
 
-## Phase 4 — Advanced AI & Screening (Out of Scope Until Approved)
+## Phase 4 — Advanced AI & Screening (Mostly Done; AI Recommendation Still Out of Scope)
 
-Explicitly excluded from every sprint to date; requires a fresh, explicit
-scoping decision before any of this is started:
+Per explicit CTO authorization recorded in
+[docs/product/roadmap.md](product/roadmap.md)'s Status section, most of this
+phase has since been implemented as the Mortgage Knowledge Database
+(Sprints 6.3A–6.3C — schema/RLS/RPC + TypeScript service layers only, no UI,
+migrations authored but not executed against the live database):
+- Income Knowledge, Commitment Knowledge (bank/product-scoped recognition of
+  income and existing commitments)
 - DSR (Debt Service Ratio) calculation
-- Eligibility screening
-- Bank-product matching
-- Recommendation engine
+- Property Rules Knowledge (margin-of-finance, tenure, property constraints)
+- Eligibility screening — the `create_eligibility_verdict` RPC, combining
+  DSR and Property Rules outputs into a per-case, per-bank-product verdict
+
+See [docs/product/roadmap.md](product/roadmap.md) for the sprint-by-sprint
+detail and [ADRs 0010–0014](decisions/README.md).
+
+Still requires a fresh, explicit CTO/user scoping decision before starting:
+- **AI Recommendation** — the last remaining domain of the Mortgage
+  Knowledge Database's 11-table blueprint (ranking/recommending bank
+  products)
 - Additional OCR document templates beyond NRIC/salary slip
 
 ## Phase 5 — Scale (Future Vision, Not Scoped)

@@ -41,6 +41,8 @@ live only in the Supabase SQL Editor. Producing a real baseline is top priority 
 | `property_rules` | **Planned.** Sprint 6.3B-4 (Property Rules Knowledge). Margin-of-finance, tenure, and eligibility constraints that vary by the property being financed, per bank/product. `bank_id` (required, never a wildcard), `bank_product_id` (nullable = this bank's default, wildcard/most-specific-wins — same pattern as every other rule table), `rule_name`, `property_type`/`construction_status`/`occupancy_intent` (all required, exact-match, never a wildcard — e.g. residential/commercial/land/other, completed/under_construction/progressive_drawdown, owner_occupied/investment — open text, not CHECK-constrained, same posture as `commitment_recognition_rules.commitment_type`), `existing_property_count_min`/`existing_property_count_max`, `margin_of_finance_percentage`, `max_tenure_years`, `description`, `version`, `is_active`/`effective_from`/`effective_to`. **Combines both prior matching shapes**: three required exact-match text dimensions (like `commitment_recognition_rules.commitment_type`) *plus* a numeric-range dimension (like `dsr_rules`' income-tier bounds) — but `existing_property_count_min`/`existing_property_count_max` deliberately use an **INCLUSIVE-INCLUSIVE range**, not `dsr_rules`' half-open convention: a rule matches a given existing-financed-property count when `(existing_property_count_min IS NULL OR count >= existing_property_count_min) AND (existing_property_count_max IS NULL OR count <= existing_property_count_max)`. This is a deliberately different bound convention from `dsr_rules`' half-open income-tier range (`>= lower AND < upper`), documented explicitly in the migration and via `COMMENT ON COLUMN` on both bound columns, because this is a discrete integer count (no fractional value can sit ambiguously on a boundary the way a continuous income figure can) rather than a continuous decimal value — a future reader should not assume both range-typed rule tables in this Knowledge Base share one bound convention. Range-matching logic is a future TypeScript task (`src/lib/property-rules-knowledge/match-property-rule.ts`), not implemented by this migration. Partial unique index (`property_rules_active_profile_version_idx`) scoped to `bank_id`, `bank_product_id`, `property_type`, `construction_status`, `occupancy_intent`, `version` — **does not catch two active rules with overlapping existing-property-count ranges** for an otherwise-identical scope; accepted Phase 1 gap, same precedent as `dsr_rules`' income-tier-overlap gap. No real bank policy figures (`margin_of_finance_percentage`, `max_tenure_years`) are seeded by the migration itself — same "no safe illustrative numeric value exists" posture as `dsr_rules`' seed template. Authored in `supabase/migrations/20260729010000_property_rules_knowledge_schema.sql`. Not confirmed run yet. |
 | `evidence` | **Planned.** Sprint 6.3B-1. A normalized fact record decoupled from its origin (OCR, manual entry, customer declaration), the shared input every Derivation Knowledge rule (income and commitment today; property in future sprints) reasons over. `loan_case_id` (FK, cascade delete), `evidence_type`/`source_type` (open vocabulary, not enums), `value` (jsonb), `source_document_id`/`source_extraction_id` (nullable FKs), `captured_by_user_id`, `captured_at`, `superseded_by_evidence_id` (a correction is always a new row pointing forward; the corrected row is never edited). Append-only — no UPDATE/DELETE RLS policy at all. Authored in `supabase/migrations/20260726010000_income_knowledge_schema.sql`. Not confirmed run yet. |
 | `derivation_results` | **Planned.** Sprint 6.3B-1. An append-only, computation-time snapshot of one derivation output for a case + `bank_product_id`, referencing the rule row/version that produced it. `domain` (`income_recognition`\|`commitment_recognition`\|`property_rules`\|`dsr`, CHECK-constrained — `income_recognition`, `commitment_recognition` (Sprint 6.3B-2), `dsr` (Sprint 6.3B-3), and `property_rules` (Sprint 6.3B-4) now all have live rule tables), `rule_version` (snapshot copy, kept redundantly so the reasoning chain stays reconstructable without a join), `input_evidence_ids` (jsonb array of `evidence.id`, not a join table — **exception: `domain = 'dsr'` rows always store `[]` here**, since DSR does not consume `evidence` directly; its inputs are other `derivation_results` rows, Income/Commitment Recognition's own outputs, so the lineage is recorded inside `result_value.incomeDerivationResultIds`/`result_value.commitmentDerivationResultIds` instead — see `src/lib/dsr-knowledge/actions.ts` and the `COMMENT ON COLUMN` added to `input_evidence_ids` in `20260728010000_dsr_knowledge_schema.sql`), `result_value` (jsonb), `computed_by_user_id` (nullable — a system recomputation may have no acting user). **`rule_id` is a deliberate non-FK, polymorphic reference** — it conceptually points at whichever domain-specific rule table `domain` names (`income_recognition_rules`, `commitment_recognition_rules`, `dsr_rules`, or, as of Sprint 6.3B-4, `property_rules`), but Postgres cannot express one FK across four tables. This is a considered design choice (documented inline in the migration, mirroring ADR 0006's precedent that rule-matching logic lives in TypeScript, not SQL), not an oversight — validating `rule_id` against `domain` is an application-layer responsibility. Append-only — no UPDATE/DELETE RLS policy at all. Authored in `supabase/migrations/20260726010000_income_knowledge_schema.sql`. Not confirmed run yet. No column or CHECK-constraint change to this table was needed for Sprint 6.3B-2, Sprint 6.3B-3, or Sprint 6.3B-4 — `commitment_recognition`, `dsr`, and `property_rules` were already accepted `domain` values. |
+| `eligibility_verdicts` | **Planned.** Sprint 6.3C (Eligibility Engine). The per-case, per-`bank_product_id` eligibility verdict, persisted as a frozen, computation-time snapshot rather than recomputed live — per DB PRD Section 6 "Position on the persistence-vs-recompute tension" and the later "Frozen Decision Principle" note. `loan_case_id` (FK, required, cascade delete), `bank_product_id` (FK → `bank_products`, required — the Eligibility Engine's unit of evaluation is a Bank Product, not a Bank, per the architecture doc's Section 3), `verdict` (text, CHECK-constrained to exactly `eligible`\|`not_eligible`\|`eligible_with_conditions` — a definitively closed 3-value set per the DB PRD, unlike the open-vocabulary matching columns most of this Knowledge Base uses), `reasons` (jsonb, not null — structured list of reasons), `computed_at` (default `now()`), `requested_by_user_id` (FK → `user_profiles`, nullable — resolved server-side inside `create_eligibility_verdict` via `auth.uid()`, never a client-supplied parameter, exactly like `create_loan_case`'s `created_by`). Append-only — no UPDATE/DELETE RLS policy at all; a re-evaluation is always a new row, never an edit to a past one, stronger than the deactivate-only pattern the rule tables use (no `is_active` concept here at all). Written exclusively via the `create_eligibility_verdict` RPC (see Functions below), not via a direct Server Action `.insert()`. Authored in `supabase/migrations/20260730010000_eligibility_engine_schema.sql`. Not confirmed run yet. |
+| `eligibility_verdict_derivation_results` | **Planned.** Sprint 6.3C. The reasoning-chain join between one `eligibility_verdicts` row and every `derivation_results` row that contributed to it — the literal, queryable reasoning chain the architecture doc's Explainable AI Architecture (Section 6) requires. `eligibility_verdict_id` (FK → `eligibility_verdicts`, required), `derivation_result_id` (FK → `derivation_results`, required — **a real, enforced foreign key**, in deliberate contrast to `derivation_results.rule_id`'s deliberate non-FK design: `rule_id` is polymorphic across four possible target tables (a structural Postgres limitation), whereas `derivation_result_id` here points at exactly one already-live table, so there is no reason to leave it unenforced — **note the FK alone is not sufficient authorization**: Postgres FK checks are not subject to RLS, so `create_eligibility_verdict` additionally re-validates each id's case/product scope via a `SELECT` that *is* subject to `derivation_results`' RLS, see Functions below). Append-only — no UPDATE/DELETE RLS policy at all. Written exclusively via the `create_eligibility_verdict` RPC, as part of the same atomic transaction as the parent `eligibility_verdicts` insert — see [0004](../decisions/0004-atomic-multitable-writes-via-security-invoker-rpc.md) for the pattern this extends. Authored in `supabase/migrations/20260730010000_eligibility_engine_schema.sql`. Not confirmed run yet. |
 
 **Confirmed not to exist**: `case_notes`, `follow_ups`, `activity_logs`, `ai_sessions`,
 `loan_assessments`, `whatsapp_conversations`.
@@ -67,6 +69,39 @@ document_status: pending | verified | rejected
   `loan_cases.case_number` default.
 - `create_loan_case(...) returns loan_cases` — `SECURITY INVOKER`. See
   [../api/overview.md](../api/overview.md) for the full signature.
+- `create_eligibility_verdict(p_loan_case_id uuid, p_bank_product_id uuid,
+  p_verdict text, p_reasons jsonb, p_derivation_result_ids uuid[]) returns
+  eligibility_verdicts` — `SECURITY INVOKER`. Sprint 6.3C. Atomically inserts
+  one `eligibility_verdicts` row plus one `eligibility_verdict_derivation_results`
+  row per id in `p_derivation_result_ids`, in a single transaction — if any
+  insert fails, Postgres rolls back everything, including the
+  `eligibility_verdicts` row already inserted, so no orphaned verdict with a
+  broken reasoning chain is ever left behind. `requested_by_user_id` is
+  resolved server-side from `auth.uid()` inside the function — never a
+  parameter, exactly like `create_loan_case`'s `created_by`. RLS on both
+  underlying tables (not this function bypassing RLS) is what authorizes the
+  writes — see [0004](../decisions/0004-atomic-multitable-writes-via-security-invoker-rpc.md).
+  **Post-review security fix (same sprint)**: because this function is
+  callable directly by any authenticated staff-role caller (not only through
+  `src/lib/eligibility-engine/actions.ts`), and the bare FK on
+  `eligibility_verdict_derivation_results.derivation_result_id` is not
+  subject to RLS (FK checks are internal system checks, never RLS-gated),
+  the function now validates each `p_derivation_result_ids` entry with an
+  explicit `SELECT ... WHERE id = ... AND loan_case_id = p_loan_case_id AND
+  bank_product_id = p_bank_product_id AND domain IN ('dsr', 'property_rules')`
+  before inserting its join row — this SELECT genuinely runs under RLS, so it
+  confirms case/product relevance, domain, and caller visibility together; a
+  non-matching id raises immediately and rolls back the whole transaction.
+  The `domain` condition was added during Sprint 6.3C closing review, after
+  the initial case/product-only check was found to still allow a
+  same-case/product but wrong-domain (e.g. `income_recognition`) id to be
+  spliced into the reasoning chain. This is a referential/scope check only,
+  not a re-derivation of eligibility business logic — `p_verdict`/
+  `p_reasons` content itself remains a trusted input from the (now
+  scope-verified) caller, an explicitly accepted boundary that still relies
+  on `actions.ts` being the only real caller computing that content.
+  Authored in `supabase/migrations/20260730030000_eligibility_engine_rpc.sql`.
+  Not confirmed run yet.
 
 ## Storage
 
@@ -136,6 +171,26 @@ read-only-for-any-authenticated-user posture as `banks`/`bank_products`/
 insert/update/delete policy. No changes were made to `evidence`/`derivation_results`
 RLS for Sprint 6.3B-4, for the same reason as Sprint 6.3B-2/6.3B-3 — neither
 policy references `domain`.
+
+`eligibility_verdicts` (`20260730020000_eligibility_engine_rls.sql`) — same
+visibility-via-`EXISTS`-against-`loan_cases` pattern as `evidence`/
+`derivation_results`, joined via `loan_case_id`. `STAFF_ROLES` can insert; no
+update/delete policy at all — append-only, per the DB PRD's "Frozen Decision
+Principle." `eligibility_verdict_derivation_results` (same migration) is scoped
+via its *parent* `eligibility_verdict_id`'s own case — an `EXISTS` through
+`eligibility_verdicts → loan_cases`, not a duplicated direct `loan_case_id`
+check, since this join table has no `loan_case_id` column of its own. Both
+tables have an INSERT policy even though only the `create_eligibility_verdict`
+RPC ever writes to them — the RPC is `SECURITY INVOKER`, so it does not bypass
+RLS, it only makes the two normally-separate inserts atomic; without both
+INSERT policies, the RPC's writes would themselves be denied. Note this RLS
+INSERT policy alone does not scope `eligibility_verdict_derivation_results.
+derivation_result_id` to the right case/product — that additional check lives
+in the RPC itself (a `SELECT` against `derivation_results`, genuinely subject
+to its RLS, not the bare FK constraint which isn't RLS-gated), see
+`20260730030000_eligibility_engine_rpc.sql` and the Functions entry above. See
+`20260730020000_eligibility_engine_rls.sql`'s header comment for the full
+reasoning on why both tables still need their own INSERT policy.
 
 ## Roles
 

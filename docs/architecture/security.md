@@ -44,6 +44,32 @@ treat them as sufficient on their own. See
 
 - Default `SECURITY INVOKER`. `SECURITY DEFINER` only for narrow, audited cases like
   `generate_case_number()` (bypasses RLS solely to reach a table with zero policies).
+- **RPC parameters that reference another table must be scope-validated with a
+  real, RLS-subject `SELECT` inside the function — a bare foreign-key constraint
+  is not sufficient on its own.** A `SECURITY INVOKER` RPC is directly callable by
+  any authenticated caller via `supabase.rpc(...)`, not only through its intended
+  TypeScript caller — so if the function accepts an id (or array of ids) that must
+  belong to a specific case/product/parent scope, a foreign key alone only proves
+  the id exists *somewhere*; Postgres FK constraint checks are internal system
+  checks and are **not** subject to RLS on the referenced table, so they do not
+  limit a caller to rows they could actually see or that belong to the record
+  being acted on. The fix pattern already used twice in this codebase —
+  `create_loan_case`'s existing-customer lookup
+  ([0004](../decisions/0004-atomic-multitable-writes-via-security-invoker-rpc.md))
+  and `create_eligibility_verdict`'s `p_derivation_result_ids` validation
+  (`20260730030000_eligibility_engine_rpc.sql`, Sprint 6.3C) — is to
+  "validate by selecting it back": before trusting a caller-supplied id, `SELECT`
+  it from its source table scoped to every dimension that matters, not only the
+  parent id (e.g. `WHERE id = ... AND loan_case_id = ... AND bank_product_id = ...
+  AND domain IN (...)`), and raise if it doesn't resolve. That `SELECT` runs under
+  `SECURITY INVOKER` and is genuinely subject to the source table's own RLS, so it
+  verifies referential scope and caller visibility in one check. **Scope every
+  dimension that matters, not just the obvious parent id** — `create_eligibility_
+  verdict`'s first-pass fix scoped by case/product but omitted `domain`, letting a
+  same-case/product but wrong-domain id slip through until a closing review caught
+  it. Every future multi-table RPC in this codebase should apply this pattern to
+  any parameter that references another table, scoped to every dimension the
+  caller must not be able to forge, not just trust the FK.
 
 ## PII handling
 
@@ -105,3 +131,6 @@ treat them as sufficient on their own. See
 3. PII/secret leakage in logs.
 4. Unvalidated form input reaching the database.
 5. New PII fields without a masking/exclusion plan.
+6. RPC parameters referencing another table relying on a bare foreign key
+   instead of a real RLS-subject scope check — see "Postgres function
+   security" above.

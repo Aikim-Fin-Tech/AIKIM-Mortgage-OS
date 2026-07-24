@@ -54,8 +54,12 @@ of Done: [CLAUDE.md](CLAUDE.md).
 
 ## Current Status
 
-Not deployed anywhere. No migration has been executed against the live
-database. See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for the exact,
+Not deployed anywhere. Of the original 8 migrations, 6 have been executed
+against the live database (2 early draft files were superseded and
+intentionally never run). None of the 11 migrations added since for the
+Mortgage Knowledge Database (Income, Commitment, DSR Rules, Property Rules,
+and Eligibility Engine — backend/schema only, no UI yet) have been executed
+yet. See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for the exact,
 current build/feature state, and [docs/ROADMAP.md](docs/ROADMAP.md) for
 what's next.
 

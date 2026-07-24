@@ -24,23 +24,37 @@ PII (NRIC, income). Full vision: [docs/product/vision.md](product/vision.md).
   from typical training data, read root `AGENTS.md` before writing framework
   code), React 19.2.4, Tailwind CSS 4, Supabase (Postgres/Auth/Storage/
   PostgREST), Gemini 2.5 Pro.
-- **Build health**: `npx tsc --noEmit`, `npm run lint`, `npm run build` all
-  clean as of the last checkpoint.
+- **Build health**: `npx tsc --noEmit` and `npm run lint` are both clean on
+  the full tree, including the new Sprint 6.3 (Mortgage Knowledge Database)
+  code.
 - **Git**: `main` is confirmed **pushed and up to date with `origin/main`**
   (an earlier version of this document wrongly claimed it was unpushed — that
-  claim was stale). Commits include `6f73121` ("Phase 1 Complete"), which
-  contains the entire product described in this documentation set, and
-  `0f747d6` ("AIKIM Project Memory v1.0").
-- **Database**: **6 of 8 authored migrations have been executed against the
-  live database**, in order, confirmed directly by the user in the Supabase
-  SQL Editor: `create_loan_case_rpc`, `document_management_mvp`,
+  claim was stale). Commits, oldest to newest: `d54eabf` (Initial Next.js
+  project), `6f73121` ("Phase 1 Complete" — the entire Banker MVP feature set
+  described in this documentation set), `0f747d6` ("AIKIM Project Memory
+  v1.0"), `5db4c99` (Sprint 6.2 production database foundation), `b859e97`
+  (Mortgage Knowledge Base PRD/Architecture baseline, Sprint 6.3), `8f43ee5`
+  (Mortgage Knowledge Database PRD baseline, Sprint 6.3A), `fa53682` (Income
+  Knowledge, Sprint 6.3B-1), `336757d` (Commitment Knowledge, Sprint 6.3B-2),
+  `aa238f7` (DSR Rules Knowledge, Sprint 6.3B-3), `7e0bb5c` (Property Rules
+  Knowledge, Sprint 6.3B-4). A further commit for the Eligibility Engine
+  (Sprint 6.3C) is landing in this same unit of work — see
+  [ADR 0014](decisions/0014-eligibility-engine-implementation.md).
+- **Database**: **6 of the original 8 authored migrations have been executed
+  against the live database**, in order, confirmed directly by the user in the
+  Supabase SQL Editor: `create_loan_case_rpc`, `document_management_mvp`,
   `mortgage_rules_engine`, `mortgage_rule_admin`, `ocr_document_extraction`,
   `loan_workflow`. The two earliest draft files (`loan_case_creation`,
   `fix_create_loan_case_rpc`) were superseded and intentionally never run.
-  The schema described in this documentation is now live, but **no real
-  mortgage rule data has been seeded yet** (`mortgage_rules` is schema-only,
-  zero rows) and `document_types.ocr_kind` has not been set on any actual
-  row.
+  The schema described for those 6 files is now live, but **no real mortgage
+  rule data has been seeded yet** (`mortgage_rules` is schema-only, zero
+  rows) and `document_types.ocr_kind` has not been set on any actual row.
+  Separately, **11 further migrations for the Mortgage Knowledge Database**
+  (Sprints 6.3A–6.3C: Income Knowledge, Commitment Knowledge, DSR Rules
+  Knowledge, Property Rules Knowledge, Eligibility Engine — 10 new tables plus
+  one new RPC, `create_eligibility_verdict`) have been authored and **none
+  have been executed against the live database yet** — all pending manual
+  review and execution in the Supabase SQL Editor.
 - **Deployment**: none. Not hosted anywhere.
 - **AI (Gemini)**: package installed, API key configured, pipeline verified
   end-to-end with synthetic test fixtures — but blocked on Gemini billing for
@@ -60,14 +74,36 @@ abandoned), OCR (NRIC + salary slip via Gemini, behind a swappable
 (7 states), Case Timeline, Checklist Progress, rule-based Next Action Card,
 Loan Health Score (no AI).
 
+**Mortgage Knowledge Database (Sprints 6.3A–6.3C) — backend/schema only, no
+UI, migrations authored but not executed against the live database**: Income
+Knowledge, Commitment Knowledge, DSR Rules Knowledge, and Property Rules
+Knowledge (each a TypeScript matching/computation module plus one new rule
+table, reusing shared `banks`/`bank_products`/`evidence`/`derivation_results`
+tables introduced in Sprint 6.3B-1); and the Eligibility Engine (Sprint
+6.3C) — the first Decision Knowledge domain, combining DSR and Property
+Rules outputs into a per-case, per-bank-product verdict via a new
+`SECURITY INVOKER` RPC, `create_eligibility_verdict` (the second multi-table
+RPC in this codebase after `create_loan_case`). See
+[ADRs 0010–0014](decisions/README.md) and
+[mortgage-knowledge-database-prd.md](product/mortgage-knowledge-database-prd.md).
+The only remaining domain of this PRD's 11-table blueprint, **AI
+Recommendation, has not been started** and requires a separate CTO/user
+review before any work begins.
+
 Full module-by-module breakdown: [CURRENT_STATUS.md](CURRENT_STATUS.md) and
 [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md).
 
 ## ✔ What Is NOT Built — Verify Before Assuming Otherwise
 
 Customers module, Bankers module, Case Notes/Follow-ups, Dashboard status
-buckets, WhatsApp integration, document verify/reject workflow, DSR/
-eligibility/recommendation logic, automated tests, CI/CD, deployment.
+buckets, WhatsApp integration, document verify/reject workflow, AI
+Recommendation (the last domain of the Mortgage Knowledge Database's
+11-table blueprint — explicitly not started, gated on a separate CTO/user
+review), automated tests, CI/CD, deployment. Income Knowledge, Commitment
+Knowledge, DSR Rules Knowledge, Property Rules Knowledge, and the
+Eligibility Engine now exist as backend code + authored migrations (see
+above) but have **no UI** and are **not executed against the live
+database**.
 
 **Never previously part of this project at all — treat as entirely new scope
 if ever requested**: n8n, Supabase Edge Functions, MCP as a product feature.
@@ -76,7 +112,7 @@ build this project — not in the shipped app.)
 
 Full list with reasoning: [TODO.md](TODO.md).
 
-## ✔ All Important Design Decisions (condensed from 9 ADRs)
+## ✔ All Important Design Decisions (condensed from 14 ADRs)
 
 Full reasoning for each: [docs/decisions/](decisions/README.md).
 
@@ -105,6 +141,19 @@ Full reasoning for each: [docs/decisions/](decisions/README.md).
    `super_admin`-only by RLS and must not gate a banker-facing view).
    `on_hold` was kept in the `loan_status` enum (not removed — Postgres can't
    cheaply drop an enum value) but retired from the application.
+10. **RPC parameters that reference another table must be scope-validated
+    with a real, RLS-subject `SELECT`, never a bare foreign key alone** —
+    established via `create_eligibility_verdict` (Sprint 6.3C,
+    [ADR 0014](decisions/0014-eligibility-engine-implementation.md)). A
+    `SECURITY INVOKER` RPC is directly callable by any authenticated caller,
+    not only through its intended TypeScript caller; a foreign key alone only
+    proves an id exists *somewhere*, not that it belongs to the specific
+    case/product/domain being acted on, since FK checks aren't subject to
+    RLS on the referenced table. Scope **every** dimension that matters — a
+    closing-review pass on this same RPC found its first-pass fix scoped
+    case/product but omitted `domain`, letting a same-case/product,
+    wrong-domain id slip through. See
+    [docs/architecture/security.md](architecture/security.md).
 
 ## ✔ Things You Must Never Do
 
@@ -124,9 +173,12 @@ Full reasoning for each: [docs/decisions/](decisions/README.md).
 ## ✔ Next Phase Goals
 
 In order (full detail: [ROADMAP.md](ROADMAP.md)):
-1. ~~Human executes the pending migrations.~~ **Done** — 6 of 8 executed
-   against the live DB (2 early draft files superseded, intentionally not
-   run).
+1. ~~Human executes the pending migrations.~~ **Partially done** — 6 of the
+   original 8 are executed against the live DB (2 early draft files
+   superseded, intentionally not run). **Still pending**: all 11 Sprint 6.3
+   Mortgage Knowledge Database migrations (Income, Commitment, DSR Rules,
+   Property Rules, Eligibility Engine) are authored and awaiting human
+   review and execution.
 2. Resolve Gemini billing.
 3. Product decisions: Dashboard bucket definitions, WhatsApp provider.
 4. Seed real mortgage rule data.
@@ -135,8 +187,12 @@ In order (full detail: [ROADMAP.md](ROADMAP.md)):
    with `origin/main`.
 7. Then: Dashboard buckets, WhatsApp receive-and-attach, document
    verify/reject.
-8. Explicitly out of scope until separately approved: DSR, eligibility,
-   bank-product matching, recommendation engine.
+8. Explicitly out of scope until separately approved: **AI Recommendation**
+   — the last remaining domain of the Mortgage Knowledge Database's
+   11-table blueprint. DSR, eligibility, and Income/Commitment/Property
+   Rules Knowledge are no longer out of scope — all five have been
+   implemented (backend/schema only, no UI) per explicit CTO authorization;
+   see [mortgage-knowledge-database-prd.md](product/mortgage-knowledge-database-prd.md).
 
 ## ✔ Where Everything Else Lives
 
