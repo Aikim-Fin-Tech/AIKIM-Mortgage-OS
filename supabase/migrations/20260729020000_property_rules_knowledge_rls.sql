@@ -1,0 +1,64 @@
+-- ============================================================================
+-- AIKIM Mortgage OS — Sprint 6.3B-4: Property Rules Knowledge (RLS policy)
+--
+-- Scope: the RLS policy for the 1 table created in
+-- 20260729010000_property_rules_knowledge_schema.sql. Kept as a separate
+-- migration, deliberately, matching the same split
+-- 20260726010000_income_knowledge_schema.sql /
+-- 20260726020000_income_knowledge_rls.sql,
+-- 20260727010000_commitment_knowledge_schema.sql /
+-- 20260727020000_commitment_knowledge_rls.sql, and
+-- 20260728010000_dsr_knowledge_schema.sql /
+-- 20260728020000_dsr_knowledge_rls.sql used — a reviewer approves the
+-- *shape* of the data (the schema file) before approving *who can see it*
+-- (this file).
+--
+-- Posture, per docs/product/mortgage-knowledge-database-prd.md Section 9
+-- and this codebase's existing precedent: property_rules is reference/rule
+-- data, read-only for any authenticated user, the exact same
+-- Phase-1-before-Phase-2 posture banks / bank_products /
+-- income_recognition_rules / commitment_recognition_rules / dsr_rules
+-- shipped with. No insert/update/delete policy here — writes are a future
+-- admin-surface migration, not this one.
+--
+-- No changes to evidence or derivation_results RLS in this file — both
+-- already cover every domain via the same EXISTS-against-loan_cases
+-- pattern regardless of `domain`'s value, so there is nothing
+-- property_rules-specific to add there. Confirmed by reading
+-- 20260726020000_income_knowledge_rls.sql before writing this file: neither
+-- policy references `domain` at all.
+--
+-- No DELETE policy on property_rules, matching mortgage_rules' /
+-- income_recognition_rules' / commitment_recognition_rules' /
+-- dsr_rules' "no DELETE RLS policy at all, ever" precedent
+-- (docs/architecture/security.md) — deactivate-only (is_active).
+--
+-- No policy in this file references service_role.
+--
+-- Run this after 20260729010000_property_rules_knowledge_schema.sql, in the
+-- same session. Copy this entire file into the Supabase SQL Editor.
+-- Idempotent (CREATE POLICY is preceded by DROP POLICY IF EXISTS): safe to
+-- re-run. Does not touch any existing row data. NOT executed by this
+-- session — pending human review and manual execution.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- 1. property_rules — read-only reference/rule data for any authenticated
+--    user. Same Phase-1-before-Phase-2 pattern income_recognition_rules,
+--    commitment_recognition_rules, dsr_rules, and mortgage_rules themselves
+--    followed (Phase 2 admin writes, if ever built, are a future,
+--    separately-approved migration — see
+--    20260723010000_mortgage_rule_admin.sql for the shape that Phase 2
+--    would follow).
+-- ----------------------------------------------------------------------------
+drop policy if exists "property_rules_select_authenticated" on public.property_rules;
+create policy "property_rules_select_authenticated" on public.property_rules
+for select
+using (auth.uid() is not null);
+-- No insert/update/delete policy: reference data, human-managed via SQL
+-- Editor for Phase 1, same posture as banks/bank_products/
+-- income_recognition_rules/commitment_recognition_rules/dsr_rules.
+
+-- ============================================================================
+-- End of Sprint 6.3B-4 Property Rules Knowledge RLS migration.
+-- ============================================================================

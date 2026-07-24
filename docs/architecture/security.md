@@ -79,6 +79,24 @@ treat them as sufficient on their own. See
 - No app-level rate limiting on `login` or `globalSearch`.
 - No committed RLS policy definitions in this repo (see [database.md](database.md)) —
   review actual live policies before Sprint 6.
+- **Property Rules Knowledge (Sprint 6.3B-4) — no evidence/rule value
+  canonicalization**: `property_rules.property_type` /
+  `construction_status` / `occupancy_intent` and the corresponding
+  `evidence.value` strings they are matched against (via
+  `src/lib/property-rules-knowledge/match-property-rule.ts`) are both open,
+  unconstrained text with no shared casing/whitespace canonicalization
+  mechanism between how Evidence values get recorded and how
+  `property_rules` rows get authored — e.g. `"Residential"` recorded as
+  Evidence would not match a `property_rules` row authored as
+  `"residential"`. This is a data-quality/operational risk, not a PII
+  concern: it fails closed (`computePropertyRulesForCase` returns a clear
+  "no property rule matched" error, never a wrong silent result), but could
+  spuriously block a legitimate case with a misleading cause. Found by a
+  `security-reviewer` pass during Sprint 6.3B-4 and recorded, not
+  code-fixed — no canonicalization mechanism exists yet in this codebase
+  (e.g. a shared constants list enforced at both the evidence-recording and
+  rule-authoring paths); resolving it requires a future, deliberate
+  decision, not something this sprint's scope covered.
 
 ## What `security-reviewer` checks
 

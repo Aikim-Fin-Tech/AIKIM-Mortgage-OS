@@ -1,13 +1,14 @@
 # Mortgage Knowledge Database PRD
 
 Status: **Draft blueprint; CTO-approved for Sprint 6.3B-1 (Income Knowledge),
-Sprint 6.3B-2 (Commitment Knowledge), and Sprint 6.3B-3 (DSR Rules Knowledge)
-only, all of which have been implemented (code authored, not executed) — see
-the "Sprint 6.3B-1 authorization", "Sprint 6.3B-2 authorization", and
-"Sprint 6.3B-3 authorization" updates in the Status section below. Every
-other domain in this document (Property Rules, Eligibility Engine, AI
-Recommendation) remains awaiting a separate CTO review before any further
-SQL or migration work begins.**
+Sprint 6.3B-2 (Commitment Knowledge), Sprint 6.3B-3 (DSR Rules Knowledge), and
+Sprint 6.3B-4 (Property Rules Knowledge) only, all of which have been
+implemented (code authored, not executed) — see the "Sprint 6.3B-1
+authorization", "Sprint 6.3B-2 authorization", "Sprint 6.3B-3 authorization",
+and "Sprint 6.3B-4 authorization" updates in the Status section below. Every
+remaining domain in this document (Eligibility Engine, AI Recommendation)
+remains awaiting a separate CTO review before any further SQL or migration
+work begins.**
 Version: 1.0
 Date: 2026-07-23
 Author: supabase-architect (Sprint 6.3, Day 3 of the same scoping exercise)
@@ -1149,5 +1150,73 @@ CTO's own authorization; it is the CTO's decision, not one this document,
 any agent, or any other doc asserted on its own authority. This
 authorization is scoped to Sprint 6.3B-3 / DSR Rules Knowledge only — it
 does **not** extend to Property Rules, the Eligibility Engine, or AI
-Recommendation. The next domain still requires a separate CTO review before
-it may start, and is not started as of this update.
+Recommendation. Property Rules Knowledge required a separate CTO review
+before it could start — see the "Sprint 6.3B-4 authorization" paragraph
+below for that review.
+
+**Sprint 6.3B-4 authorization**: per explicit CTO instruction in
+conversation ("Property Rules Knowledge Implementation, same discipline as
+Sprint 6.3B-1 (Income), 6.3B-2 (Commitment), and 6.3B-3 (DSR)"), the CTO
+authorized the next specific, narrower slice of Sprint 6.3B: Property Rules
+Knowledge only — the `property_rules` table (Section 3.7). Delivered with
+the same full-pipeline discipline as all three prior slices, in one
+continuous pass: schema migration, then the companion RLS migration, then a
+TypeScript matcher/actions layer, then a template seed kept separate from
+migrations — no UI, same as every prior slice. `banks`, `bank_products`,
+`evidence`, and `derivation_results` — all built in Sprint 6.3B-1 — are
+reused as-is, unmodified; `derivation_results.domain` already accepted
+`'property_rules'` as of that migration, so no change to it was needed.
+That work has been delivered — migrations authored in
+`supabase/migrations/20260729010000_property_rules_knowledge_schema.sql`
+and `supabase/migrations/20260729020000_property_rules_knowledge_rls.sql`
+(both **authored, not executed**, per this codebase's Migration Policy — no
+agent ever executes a migration), a template seed in
+`supabase/seeds/20260729010000_property_rules_knowledge_seed.sql` (with
+`margin_of_finance_percentage`/`max_tenure_years` deliberately left `NULL`
+— same reasoning as `dsr_rules`' seed template: no safe illustrative figure
+exists for this table's core figures), and a new
+`src/lib/property-rules-knowledge/` module (`types.ts`; the pure
+`match-property-rule.ts`, which combines every prior matcher's shapes —
+required exact-match text dimensions on `propertyType`/`constructionStatus`/
+`occupancyIntent`, like `commitment_recognition_rules.commitmentType`, plus
+an inclusive-inclusive numeric range test on `existingPropertyCountMin`/
+`existingPropertyCountMax`, deliberately different bound semantics from
+`dsr_rules`' half-open income-tier range; and `actions.ts`, the
+`computePropertyRulesForCase` Server Action) plus one read-only function,
+`getPropertyRules(bankId?)`, in
+`src/lib/database/property-rules-knowledge.ts`. Unlike Income/Commitment/
+DSR, Property Rules is a lookup, not a "recognition" with a transformation
+formula — given a matched rule, the result is that rule's
+`marginOfFinancePercentage`/`maxTenureYears` passed through as-is, so there
+is no separate compute module. It reads `evidence` directly (like
+Income/Commitment, unlike DSR), via 4 separately-named evidence ids rather
+than an array, since each plays a distinct role. A security-review pass
+found one real gap, fixed before this work was considered complete: the
+initial implementation matched evidence rows to their intended field only
+by id, with no check that a given evidence row was actually the *kind* of
+fact it was being used as — since `constructionStatus` and `occupancyIntent`
+are both unconstrained open text strings, a caller could transpose one
+evidence id into the other's slot and it would silently pass every check.
+Fixed by adding an `evidence_type` discriminator check (`EXPECTED_EVIDENCE_TYPE`
+constants) verified per slot before proceeding. A second, lower-severity
+finding was recorded, not code-fixed: there is no casing/whitespace
+canonicalization between how Evidence values get recorded and how
+`property_rules` rows get authored (e.g. `"Residential"` vs `"residential"`)
+— this fails closed (a clear "no rule matched" error, not a wrong silent
+result), but is flagged as a known operational gap requiring a future,
+deliberate decision. See
+[../architecture/security.md](../architecture/security.md)'s Known gaps
+section for the durable record of that finding. No UI — explicitly out of
+scope this sprint, same as every prior slice. See
+[../architecture/database.md](../architecture/database.md) for the table.
+This paragraph reports the CTO's own authorization; it is the CTO's
+decision, not one this document, any agent, or any other doc asserted on
+its own authority. This authorization is scoped to Sprint 6.3B-4 / Property
+Rules Knowledge only — it does **not** extend to the Eligibility Engine or
+AI Recommendation. With all four Derivation/Computation Knowledge domains
+(Income, Commitment, DSR, Property Rules) now implemented, this document's
+remaining unimplemented tables are `eligibility_verdicts`,
+`eligibility_verdict_derivation_results`, and `ai_recommendations`. The next
+domain (Eligibility Engine, or whichever domain the CTO names next) still
+requires a separate CTO review before it may start, and is not started as
+of this update.

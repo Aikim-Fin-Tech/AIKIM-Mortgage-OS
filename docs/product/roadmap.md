@@ -38,15 +38,17 @@ first banker use AIKIM in a real loan case?" P0 order:
   executed**. See [../decisions/0007-mortgage-rule-admin.md](../decisions/0007-mortgage-rule-admin.md).
 - Rule Version UI, further admin enhancements, Advanced Rule Engine work, Event
   History UI — none started beyond what Phase 2 already shipped.
-- Mortgage Knowledge Base beyond Income Knowledge, Commitment Knowledge, and DSR
-  Rules Knowledge: the remaining domains (Property Rules, Eligibility Engine, AI
-  Recommendation) require a separate CTO review before starting — see "Sprint
-  6.3B-1 — Income Knowledge Implementation", "Sprint 6.3B-2 — Commitment
-  Knowledge Implementation", and "Sprint 6.3B-3 — DSR Rules Knowledge
-  Implementation" below. Income Knowledge, Commitment Knowledge, and DSR Rules
-  Knowledge are no longer frozen; all three have been authored per explicit CTO
-  authorization. Property Rules is the next domain still requiring a separate
-  CTO review before it may start.
+- Mortgage Knowledge Base beyond Income Knowledge, Commitment Knowledge, DSR
+  Rules Knowledge, and Property Rules Knowledge: the remaining domains
+  (Eligibility Engine, AI Recommendation) require a separate CTO review before
+  starting — see "Sprint 6.3B-1 — Income Knowledge Implementation", "Sprint
+  6.3B-2 — Commitment Knowledge Implementation", "Sprint 6.3B-3 — DSR Rules
+  Knowledge Implementation", and "Sprint 6.3B-4 — Property Rules Knowledge
+  Implementation" below. Income Knowledge, Commitment Knowledge, DSR Rules
+  Knowledge, and Property Rules Knowledge are no longer frozen; all four have
+  been authored per explicit CTO authorization. With all four Derivation/
+  Computation Knowledge domains now implemented, the Eligibility Engine is the
+  next domain still requiring a separate CTO review before it may start.
 
 ## Implemented
 
@@ -197,6 +199,72 @@ first banker use AIKIM in a real loan case?" P0 order:
   Status section and [0012](../decisions/0012-dsr-knowledge-implementation.md).
   The next domain (Property Rules) still requires a separate CTO review
   before starting.
+- **Sprint 6.3B-4 — Property Rules Knowledge Implementation**: the fourth
+  implemented slice of the Mortgage Knowledge Database blueprint
+  ([mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)). 1
+  new table (`property_rules`) — migrations authored
+  (`20260729010000_property_rules_knowledge_schema.sql`,
+  `20260729020000_property_rules_knowledge_rls.sql`), **not executed**; a
+  template seed (`supabase/seeds/20260729010000_property_rules_knowledge_seed.sql`,
+  `margin_of_finance_percentage`/`max_tenure_years` deliberately left `NULL`
+  — same reasoning as `dsr_rules`' seed template: no safe illustrative
+  numeric value exists for this table's core figures — lives outside
+  `supabase/migrations/` by design, never auto-run); a new
+  `src/lib/property-rules-knowledge/` module (`types.ts`; the pure
+  `match-property-rule.ts`, which combines both prior matching shapes —
+  three required exact-match text dimensions (`propertyType`/
+  `constructionStatus`/`occupancyIntent`), same treatment as
+  `commitment_recognition_rules.commitmentType`, plus an
+  INCLUSIVE-INCLUSIVE numeric range test on `existingPropertyCountMin`/
+  `existingPropertyCountMax` — deliberately different bound semantics from
+  `dsr_rules`' half-open income-tier range; and `actions.ts`, the
+  `computePropertyRulesForCase` Server Action); one read-only function,
+  `getPropertyRules(bankId?)`, in
+  `src/lib/database/property-rules-knowledge.ts`. `banks`, `bank_products`,
+  `evidence`, and `derivation_results` (all built in Sprint 6.3B-1) are
+  reused as-is, unmodified — `derivation_results.domain` already accepted
+  `'property_rules'`. Unlike Income/Commitment/DSR, Property Rules is a
+  lookup, not a "recognition" with a transformation formula — given a
+  matched rule, the "computed" result is that rule's
+  `marginOfFinancePercentage`/`maxTenureYears` passed through as-is, so
+  there is no separate compute module. It reads `evidence` directly (like
+  Income/Commitment, unlike DSR which reads `derivation_results`), via 4
+  separately-named evidence ids (property type, construction status,
+  occupancy intent, existing property count) rather than an array, since
+  each plays a distinct role. A security-review pass found one real gap,
+  fixed before this work was considered complete: the initial
+  implementation matched evidence rows to their intended field only by id,
+  with no check that a given evidence row was actually the *kind* of fact
+  it was being used as — since `constructionStatus` and `occupancyIntent`
+  are both unconstrained open text strings, a caller transposing one
+  evidence id into the other's slot would have silently passed every other
+  check. Fixed by adding an `evidence_type` discriminator check
+  (`EXPECTED_EVIDENCE_TYPE` constants: `"property_type"`,
+  `"construction_status"`, `"occupancy_intent"`, `"existing_property_count"`)
+  verified per slot before proceeding. A second, lower-severity finding was
+  recorded, not code-fixed: there is no casing/whitespace canonicalization
+  between how Evidence values get recorded and how `property_rules` rows
+  get authored (e.g. `"Residential"` vs `"residential"`) — this fails
+  closed (a clear "no rule matched" error, not a wrong silent result), but
+  could cause a legitimate case to be spuriously blocked with a misleading
+  cause; flagged as a known operational gap requiring a future, deliberate
+  decision (e.g. a shared constants list enforced at both the
+  evidence-recording and rule-authoring paths). No UI — explicitly out of
+  scope this sprint, same as every prior slice. See
+  [../architecture/database.md](../architecture/database.md) for the table
+  and [../architecture/security.md](../architecture/security.md) for the
+  canonicalization-gap record.
+  **CTO authorization**: the CTO explicitly authorized this specific slice
+  — "Property Rules Knowledge Implementation... same discipline as Sprint
+  6.3B-1 (Income), 6.3B-2 (Commitment), and 6.3B-3 (DSR)" — following the
+  exact same full-pipeline discipline as all three prior slices, delivered
+  in one continuous pass (schema+RLS migrations as separate files,
+  TypeScript matcher/actions layer, seeder template, no UI, security
+  review, QA, docs). The primary record of this authorization is in
+  [mortgage-knowledge-database-prd.md](mortgage-knowledge-database-prd.md)'s
+  Status section. With all four Derivation/Computation Knowledge domains
+  (Income, Commitment, DSR, Property Rules) now implemented, the Eligibility
+  Engine still requires a separate CTO review before starting.
 
 ## Planned
 
