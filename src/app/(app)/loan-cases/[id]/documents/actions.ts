@@ -252,8 +252,25 @@ export type ExtractDocumentDataState = {
 };
 
 function isOcrKind(value: string | null): value is OCRDocumentKind {
-  return value === "nric" || value === "salary_slip";
+  return (
+    value === "nric" ||
+    value === "salary_slip" ||
+    value === "bank_statement" ||
+    value === "epf_statement" ||
+    value === "employment_letter" ||
+    value === "ea_form"
+  );
 }
+
+/** Sprint 2: widened from 2 to 6 kinds — see docs/decisions/0016-... Decision 3. */
+const OCR_KIND_LABELS: Record<OCRDocumentKind, string> = {
+  nric: "NRIC",
+  salary_slip: "Salary Slip",
+  bank_statement: "Bank Statement",
+  epf_statement: "EPF Statement",
+  employment_letter: "Employment Letter",
+  ea_form: "EA Form",
+};
 
 /**
  * Runs OCR (Gemini 2.5 Pro, via the OCRProvider interface — see
@@ -332,7 +349,7 @@ export async function extractDocumentData(caseNumber: string, documentId: string
     // key is added, not a bug. Still recorded as a failed attempt below.
     const message = providerError instanceof Error ? providerError.message : "OCR provider is not configured.";
     console.error(`[extractDocumentData] provider unavailable. message=${message}`);
-    result = { kind, fields: null, modelName: "unavailable", error: message };
+    result = { kind, fields: null, confidence: null, modelName: "unavailable", error: message };
   }
 
   const { error: insertError } = await supabase.from("document_extractions").insert({
@@ -349,7 +366,7 @@ export async function extractDocumentData(caseNumber: string, documentId: string
     return { error: "Extraction ran but the result could not be saved. Please try again." };
   }
 
-  const kindLabel = kind === "nric" ? "NRIC" : "Salary Slip";
+  const kindLabel = OCR_KIND_LABELS[kind];
   await recordTimelineEvent(
     supabase,
     loanCaseId,
