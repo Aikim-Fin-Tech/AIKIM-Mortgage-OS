@@ -41,3 +41,14 @@ export const LOW_CONFIDENCE_THRESHOLD = 0.7;
  * low-confidence guess that shouldn't be flagged.
  */
 export const MISMATCH_MIN_CONFIDENCE = 0.6;
+
+/**
+ * PD-017 Phase A — minimum classify() confidence required to auto-assign
+ * documents.document_type_id at upload time (see
+ * decide-document-type-assignment.ts). An implementation constant, not an
+ * architectural decision — the decision function itself takes this as an
+ * explicit parameter, never hard-coded internally, so it can later be
+ * sourced from a database-configurable setting without that function
+ * changing; this is just where the current caller-side value lives.
+ */
+export const DOCUMENT_TYPE_ASSIGNMENT_CONFIDENCE_THRESHOLD = 0.7;

@@ -7,6 +7,8 @@ import { STAFF_ROLES } from "@/lib/auth/staff-roles";
 import { ALLOWED_DOCUMENT_MIME_TYPES, MAX_DOCUMENT_FILE_SIZE_BYTES } from "@/lib/documents/document-status";
 import { getOCRProvider } from "@/lib/ocr/get-ocr-provider";
 import type { OCRDocumentKind } from "@/lib/ocr/types";
+import { classifyAndResolveDocumentType } from "@/lib/document-screening/classify-and-resolve-document-type";
+import { resolveDocumentTypeIdForKind } from "@/lib/document-screening/resolve-document-type-for-kind";
 import { recordTimelineEvent } from "@/lib/timeline/record-timeline-event";
 
 /**
@@ -100,9 +102,41 @@ export async function recordDocumentUpload(
     uploaderProfileId = profileRow?.id ?? null;
   }
 
+  // PD-017 Phase A: a manually-picked type (still supported, unchanged
+  // behavior) always wins. Only when nothing was picked do we try to
+  // auto-classify the just-uploaded file. This entire block can never fail
+  // the upload itself — classifyAndResolveDocumentType() never throws, and
+  // the outer try/catch here is an extra safety net against anything
+  // unexpected (e.g. a storage download failure) — any failure simply
+  // leaves resolvedDocumentTypeId as null, exactly as if classification had
+  // never run, for the Banker to confirm manually later.
+  let resolvedDocumentTypeId = input.documentTypeId;
+
+  if (resolvedDocumentTypeId === null) {
+    try {
+      const { data: fileBlob, error: downloadError } = await supabase.storage
+        .from("loan-documents")
+        .download(input.storagePath);
+
+      if (downloadError || !fileBlob) {
+        console.error(`[recordDocumentUpload] could not download for classification. message=${downloadError?.message ?? "no file"}`);
+      } else {
+        const bytes = new Uint8Array(await fileBlob.arrayBuffer());
+        resolvedDocumentTypeId = await classifyAndResolveDocumentType(
+          { bytes, mimeType: input.mimeType },
+          { classify: (file) => getOCRProvider().classify(file), resolve: resolveDocumentTypeIdForKind },
+        );
+      }
+    } catch (classificationError) {
+      console.error(
+        `[recordDocumentUpload] classification step failed unexpectedly, continuing upload with no type. message=${classificationError instanceof Error ? classificationError.message : "unknown"}`,
+      );
+    }
+  }
+
   const { error: insertError } = await supabase.from("documents").insert({
     loan_case_id: loanCaseId,
-    document_type_id: input.documentTypeId,
+    document_type_id: resolvedDocumentTypeId,
     file_name: input.fileName,
     storage_path: input.storagePath,
     file_size: input.fileSize,
