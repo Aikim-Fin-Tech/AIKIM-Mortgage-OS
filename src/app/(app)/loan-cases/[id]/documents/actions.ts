@@ -165,6 +165,59 @@ export async function recordDocumentUpload(
   return { error: null };
 }
 
+export type AssignDocumentTypeState = {
+  error: string | null;
+};
+
+/**
+ * PD-017 Phase A — Banker confirmation for a document that couldn't be
+ * auto-classified with confidence at upload time. This is the *only*
+ * sanctioned way to change documents.document_type_id from the client: it
+ * calls the assign_document_type SQL RPC (SECURITY DEFINER, its own
+ * STAFF_ROLES + case-visibility + document_type-existence checks — see
+ * supabase/migrations/20260818010000_documents_update_policy.sql) and never
+ * issues a direct `update` against public.documents, which has no UPDATE
+ * policy or grant for this reason.
+ *
+ * The role/case checks below are the same friendly-error convenience every
+ * other action in this file already does — not a substitute for the RPC's
+ * own checks, which are the real authorization boundary.
+ */
+export async function assignDocumentTypeAction(
+  caseNumber: string,
+  documentId: string,
+  documentTypeId: string,
+): Promise<AssignDocumentTypeState> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return { error: "Your session has expired. Please sign in again." };
+  }
+  if (!STAFF_ROLES.has(currentUser.role)) {
+    return { error: "You do not have permission to assign a document type." };
+  }
+
+  const { loanCaseId, error: lookupError } = await resolveVisibleLoanCaseId(caseNumber);
+  if (!loanCaseId) {
+    return { error: lookupError ?? "Case not found or not accessible." };
+  }
+
+  const supabase = await createClient();
+
+  const { error: rpcError } = await supabase.rpc("assign_document_type", {
+    p_document_id: documentId,
+    p_document_type_id: documentTypeId,
+  });
+
+  if (rpcError) {
+    console.error(`[assignDocumentTypeAction] RPC failed. code=${rpcError.code ?? "unknown"} message=${rpcError.message}`);
+    return { error: "Could not update the document type. Please try again." };
+  }
+
+  revalidatePath(`/loan-cases/${caseNumber}/documents`);
+  revalidatePath(`/loan-cases/${caseNumber}`);
+  return { error: null };
+}
+
 export type DeleteDocumentState = {
   error: string | null;
 };

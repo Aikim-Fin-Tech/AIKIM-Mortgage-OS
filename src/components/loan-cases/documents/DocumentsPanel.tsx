@@ -11,6 +11,7 @@ import {
   deleteDocumentAction,
   getDocumentSignedUrlAction,
   extractDocumentData,
+  assignDocumentTypeAction,
 } from "@/app/(app)/loan-cases/[id]/documents/actions";
 import type { DocumentTypeOption, LoanCaseDocument } from "@/lib/database/documents";
 
@@ -26,11 +27,14 @@ export function DocumentsPanel({
   loanCaseId,
   documents,
   documentTypes,
+  userRole,
 }: {
   caseNumber: string;
   loanCaseId: string;
   documents: LoanCaseDocument[];
   documentTypes: DocumentTypeOption[];
+  /** Nav-visibility-style gate for the type-confirmation control only — not a security boundary. See Sidebar's `userRole` for the established pattern this mirrors; the real authorization is assign_document_type's own STAFF_ROLES check plus RLS. */
+  userRole: string | null;
 }) {
   const router = useRouter();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -74,6 +78,19 @@ export function DocumentsPanel({
     router.refresh();
   }
 
+  async function handleAssignType(doc: LoanCaseDocument, documentTypeId: string) {
+    setListError(null);
+    setPendingDocumentId(doc.id);
+    const result = await assignDocumentTypeAction(caseNumber, doc.id, documentTypeId);
+    setPendingDocumentId(null);
+
+    if (result.error) {
+      setListError(result.error);
+      return;
+    }
+    router.refresh();
+  }
+
   async function handleDelete(doc: LoanCaseDocument) {
     const confirmed = window.confirm(`Delete "${doc.fileName ?? "this document"}"? This cannot be undone.`);
     if (!confirmed) return;
@@ -111,11 +128,14 @@ export function DocumentsPanel({
       <div className="mt-4">
         <DocumentsTable
           documents={documents}
+          documentTypes={documentTypes}
+          userRole={userRole}
           pendingDocumentId={pendingDocumentId}
           onPreview={handlePreview}
           onDownload={handleDownload}
           onDelete={handleDelete}
           onExtract={handleExtract}
+          onAssignType={handleAssignType}
         />
       </div>
 
@@ -123,7 +143,6 @@ export function DocumentsPanel({
         <DocumentUploadDialog
           caseNumber={caseNumber}
           loanCaseId={loanCaseId}
-          documentTypes={documentTypes}
           onClose={() => setIsUploadOpen(false)}
           onUploaded={handleUploaded}
         />

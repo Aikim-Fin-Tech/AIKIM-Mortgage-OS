@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getLoanCaseDetails } from "@/lib/database/loan-case-details";
 import { getLoanCaseDocuments, getDocumentTypeOptions } from "@/lib/database/documents";
 import { getRequiredDocuments } from "@/lib/database/required-documents";
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { LoanCaseHeader } from "@/components/loan-cases/detail/LoanCaseHeader";
 import { LoanCaseTabs } from "@/components/loan-cases/detail/LoanCaseTabs";
 import { DocumentsPanel } from "@/components/loan-cases/documents/DocumentsPanel";
@@ -14,11 +15,12 @@ type PageProps = {
 export default async function LoanCaseDocumentsPage({ params }: PageProps) {
   const { id } = await params;
 
-  const [details, documentsResult, documentTypesResult, requiredResult] = await Promise.all([
+  const [details, documentsResult, documentTypesResult, requiredResult, currentUser] = await Promise.all([
     getLoanCaseDetails(id),
     getLoanCaseDocuments(id),
     getDocumentTypeOptions(),
     getRequiredDocuments(id),
+    getCurrentUser(),
   ]);
 
   if (!details.case || !documentsResult.loanCaseId) {
@@ -54,6 +56,7 @@ export default async function LoanCaseDocumentsPage({ params }: PageProps) {
           loanCaseId={documentsResult.loanCaseId}
           documents={documentsResult.documents}
           documentTypes={documentTypesResult.types}
+          userRole={currentUser?.role ?? null}
         />
       </div>
     </div>

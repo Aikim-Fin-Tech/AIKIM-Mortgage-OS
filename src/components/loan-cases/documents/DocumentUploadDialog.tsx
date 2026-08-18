@@ -3,11 +3,9 @@
 import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { CloseIcon } from "@/components/dashboard/icons";
 import { MAX_DOCUMENT_FILE_SIZE_BYTES, isAllowedDocumentFile } from "@/lib/documents/document-status";
 import { recordDocumentUpload } from "@/app/(app)/loan-cases/[id]/documents/actions";
-import type { DocumentTypeOption } from "@/lib/database/documents";
 
 const ACCEPT_ATTR = ".pdf,.jpg,.jpeg,.png";
 
@@ -15,21 +13,25 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").slice(-150);
 }
 
+/**
+ * PD-017 Phase A: no document-type picker here anymore — every upload is
+ * classified automatically after it lands (see recordDocumentUpload). A
+ * document that can't be auto-classified with high confidence stays
+ * unassigned and is confirmed later from the Documents table, not chosen
+ * up front.
+ */
 export function DocumentUploadDialog({
   caseNumber,
   loanCaseId,
-  documentTypes,
   onClose,
   onUploaded,
 }: {
   caseNumber: string;
   loanCaseId: string;
-  documentTypes: DocumentTypeOption[];
   onClose: () => void;
   onUploaded: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
-  const [documentTypeId, setDocumentTypeId] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -76,7 +78,7 @@ export function DocumentUploadDialog({
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
-      documentTypeId: documentTypeId || null,
+      documentTypeId: null,
     });
 
     if (result.error) {
@@ -104,23 +106,6 @@ export function DocumentUploadDialog({
 
         <div className="space-y-4 p-5">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Document Type</label>
-            <Select
-              value={documentTypeId}
-              onChange={(event) => setDocumentTypeId(event.target.value)}
-              className="w-full"
-              disabled={isUploading}
-            >
-              <option value="">General Document</option>
-              {documentTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">File</label>
             <input
               ref={inputRef}
@@ -134,6 +119,10 @@ export function DocumentUploadDialog({
             />
             <p className="mt-1.5 text-xs text-slate-400">
               PDF, JPG, or PNG. Max {(MAX_DOCUMENT_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(0)}MB.
+            </p>
+            <p className="mt-1.5 text-xs text-slate-400">
+              This file&apos;s document type will be identified automatically after it uploads. If it can&apos;t be
+              identified with confidence, you&apos;ll confirm the type from the documents list.
             </p>
           </div>
 
