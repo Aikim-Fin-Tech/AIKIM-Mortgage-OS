@@ -68,7 +68,14 @@ function normalizeEmbed<T>(value: T | T[] | null): T | null {
 }
 
 function isOcrKind(value: string | null): value is OCRDocumentKind {
-  return value === "nric" || value === "salary_slip";
+  return (
+    value === "nric" ||
+    value === "salary_slip" ||
+    value === "bank_statement" ||
+    value === "epf_statement" ||
+    value === "employment_letter" ||
+    value === "ea_form"
+  );
 }
 
 export async function getLoanCaseDocuments(caseNumber: string): Promise<GetLoanCaseDocumentsResult> {

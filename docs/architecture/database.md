@@ -21,7 +21,7 @@ live only in the Supabase SQL Editor. Producing a real baseline is top priority 
 | `customers` | `full_name`, `phone`, `email`, `ic_number`, `address` |
 | `bankers` | `full_name`, `bank_name`, `branch`, `phone`, `email` |
 | `documents` | `status`, `created_at`, `verified_at`, FK `loan_case_id`, `document_types`. **Planned columns** `file_name`, `storage_path`, `file_size`, `mime_type`, `uploaded_by_user_id`, `storage_provider` (default `'supabase'`), `document_hash` (nullable, unused), `processing_status` (default `'UPLOADED'`) — authored in `supabase/migrations/20260721010000_document_management_mvp.sql` (additive, `IF NOT EXISTS`), not confirmed run yet. |
-| `document_types` | `name`. **Planned columns** `category_id` → `document_categories` (`20260722010000_mortgage_rules_engine.sql`), `ocr_kind` (`nric`\|`salary_slip`\|null — `20260724010000_ocr_document_extraction.sql`). Neither confirmed run yet. Every existing row will have `ocr_kind = null` until a human tags the real NRIC/salary slip types via SQL. |
+| `document_types` | `name`. **Planned columns** `category_id` → `document_categories` (`20260722010000_mortgage_rules_engine.sql`), `ocr_kind` (`nric`\|`salary_slip`\|`bank_statement`\|`epf_statement`\|`employment_letter`\|`ea_form`\|null — originally `nric`\|`salary_slip`\|null in `20260724010000_ocr_document_extraction.sql`, widened to all 6 `src/lib/ocr/types.ts` `OCRDocumentKind` values by `20260802010000_document_screening_confidence_validation.sql` per [0016](../decisions/0016-document-screening-classification-and-validation.md) Decision 4 — the `document_types_ocr_kind_valid` CHECK constraint was dropped and recreated, not edited in place). None confirmed run yet. Every existing row will have `ocr_kind = null` until a human tags the real document types via SQL (no admin UI for this exists) — for the 4 new kinds, matching `document_types` rows (e.g. Bank Statement, EPF Statement, Employment Letter, EA Form) may not exist at all yet; `20260802010000_document_screening_confidence_validation.sql` deliberately does not insert them, matching `20260724010000_ocr_document_extraction.sql`'s own precedent (see [0008](../decisions/0008-ocr-and-ai-case-summary.md)) of leaving this entirely to a human SQL Editor step. |
 | `user_profiles` | `auth_user_id → auth.users`, `full_name`, `role` |
 | `audit_logs` | Trigger-populated. RLS: `super_admin`-only read today. |
 | `case_number_counters` | `year` PK, `last_value`. Zero RLS policies — only reachable via `generate_case_number()`. |
@@ -31,7 +31,7 @@ live only in the Supabase SQL Editor. Producing a real baseline is top priority 
 | `mortgage_rule_documents` | **Planned.** Join: `mortgage_rule_id`, `document_type_id`, `required_count` (drives completion), `required_months` (display only), plus **`is_mandatory`, `display_order`, `notes`** (Phase 2). No `category_id` here by design — always derived via `document_type_id → document_types.category_id`, see [0007](../decisions/0007-mortgage-rule-admin.md). |
 | `loan_case_required_documents` | **Planned.** Per-case generated checklist. `state` (`active`/`not_required`) is the only stored status — "Completed" vs "Missing" is always computed live against `documents`, never stored. |
 | `loan_case_required_document_events` | **Planned.** Append-only audit trail of every add/mark-not-required/reactivate transition, keyed by rule change. |
-| `document_extractions` | **Planned.** One row per OCR attempt (`20260724010000_ocr_document_extraction.sql`) — `document_id`, `kind`, `extracted_data` (jsonb, null on failure), `model_name`, `error`, `extracted_by_user_id`. Append-only — every attempt kept, never overwritten. See [0008](../decisions/0008-ocr-and-ai-case-summary.md). |
+| `document_extractions` | **Planned.** One row per OCR attempt (`20260724010000_ocr_document_extraction.sql`) — `document_id`, `kind` (CHECK widened from `nric`\|`salary_slip` to all 6 `OCRDocumentKind` values by `20260802010000_document_screening_confidence_validation.sql`, constraint `document_extractions_kind_check` dropped and recreated), `extracted_data` (jsonb, null on failure), `model_name`, `error`, `extracted_by_user_id`. **Additive Sprint 2 columns** (same migration, per [0016](../decisions/0016-document-screening-classification-and-validation.md) Decision 4, all nullable): `confidence` (numeric, null or 0-1, extraction's self-reported confidence), `validation_status` (`PASS`\|`REVIEW`\|`FAIL`\|null, computed deterministically by `computeValidation()`, never AI-decided), `validation_issues` (jsonb array of `{code, field, message}`, no default — stays `null`, not `'[]'::jsonb`), `classification_predicted_kind` (the 6 kinds plus `unrecognized`, or null — `classify()`'s independent, unprimed guess), `classification_confidence` (numeric, null or 0-1). All 5 are written only by the new `screenDocument` Server Action; rows from the existing `extractDocumentData` flow leave all 5 `null` — that (not a separate discriminator column) is how a future reader tells which flow produced a given row, a deliberate ADR 0016 consequence. No new RLS policy — new nullable columns on an already-covered table, and this repo has no column-level RLS. Append-only — every attempt kept, never overwritten. See [0008](../decisions/0008-ocr-and-ai-case-summary.md), [0016](../decisions/0016-document-screening-classification-and-validation.md). |
 | `loan_case_timeline_events` | **Planned.** `20260725010000_loan_workflow.sql`. Explicitly-recorded case events (`document_uploaded`, `ocr_completed`, `status_changed`) only — "Customer/Loan Created" and "Checklist Updated" are synthesized at read time, not stored here. Append-only. Visible to any staff role (not `audit_logs`-gated). See [0009](../decisions/0009-loan-processing-workflow.md). |
 | `banks` | **Discovered, during a production incident, to pre-exist in production out-of-band** — created outside this repo's migration history, before any Sprint 6.3 migration ever ran. Confirmed to exist with **0 rows**; its full column list beyond a presumed `id uuid primary key` was **not** retrieved during that investigation, so treat its current shape as unknown/defensive rather than assumed. This codebase's intended shape — `name` (unique), `short_code`, `is_active`/`effective_from`/`effective_to` (deactivate-only, no `version` column — a bank is an entity, not a revised policy value) — was originally authored as a `create table if not exists` in `supabase/migrations/20260726010000_income_knowledge_schema.sql`, which silently no-op'd against the pre-existing production table (see "Schema reconciliations" below for the full incident). Reconciliation migration `supabase/migrations/20260726005000_bank_products_schema_reconciliation.sql` adds these columns defensively, via `ADD COLUMN IF NOT EXISTS` only, touching nothing already present. **Not confirmed run yet** — and even once it is, `20260726010000_income_knowledge_schema.sql` itself must still be (re-)run afterward for this table to actually have every column this codebase needs; until both steps are confirmed run, do not assume `banks` has this full shape. Structured replacement for `loan_cases`/`bankers`' free-text `bank_name`, not yet wired to either. |
 | `bank_products` | **Discovered, during the same production incident, to pre-exist in production out-of-band**, with a confirmed, unrelated 11-column shape and **0 rows**: `id`, `bank_id`, `product_name`, `property_type`, `min_loan_amount`, `max_margin`, `max_tenure_years`, `interest_rate`, `lock_in_period_years`, `status`, `created_at` — none of these 11 columns are used, or were ever intended, by this codebase's design; they are pre-existing and explicitly out of scope (see "Schema reconciliations" below). This codebase's design additionally needs `bank_id` (FK → `banks`, already present), `product_name` (already present), plus `product_code`, `financing_structure` (open vocabulary, no classification scheme asserted), `is_active`/`effective_from`/`effective_to`, `updated_at` — these 6 were confirmed **missing** from production and are added, defensively (`ADD COLUMN IF NOT EXISTS`, none of the 11 pre-existing columns touched, retyped, or renamed), by reconciliation migration `supabase/migrations/20260726005000_bank_products_schema_reconciliation.sql`. Originally authored as a `create table if not exists` in `supabase/migrations/20260726010000_income_knowledge_schema.sql`, which silently no-op'd against the pre-existing table — the root cause of the incident this reconciliation migration fixes. **Not confirmed run yet** — and even once it is, `20260726010000_income_knowledge_schema.sql` itself must still be (re-)run afterward for this table to actually have every column this codebase needs. |
@@ -126,6 +126,38 @@ CTO's explicit instruction. Note: this index only applies once
 `income_recognition_rules` itself actually exists — see "Schema reconciliations"
 above for why that table is currently confirmed absent from production.
 
+## Constraint widenings
+
+`supabase/migrations/20260802010000_document_screening_confidence_validation.sql`
+— **Planned, not confirmed run yet.** Sprint 2 (Document Screening API v1.0), per
+[0016](../decisions/0016-document-screening-classification-and-validation.md)
+Decision 4. Widens 2 pre-existing **live** CHECK constraints (both already
+executed against production as part of
+`20260724010000_ocr_document_extraction.sql`) from `nric`\|`salary_slip` to all
+6 `src/lib/ocr/types.ts` `OCRDocumentKind` values (`nric`, `salary_slip`,
+`bank_statement`, `epf_statement`, `employment_letter`, `ea_form`):
+`document_types.ocr_kind`'s `document_types_ocr_kind_valid`, and
+`document_extractions.kind`'s `document_extractions_kind_check` (the latter's
+name is Postgres's default auto-generated name for that column's originally
+unnamed inline CHECK — not verified against a live `pg_constraint` listing,
+since no live schema access exists this session; the migration's own header
+gives a human a query to confirm before running). Also adds 5 new nullable
+columns to `document_extractions` (`confidence`, `validation_status`,
+`validation_issues`, `classification_predicted_kind`,
+`classification_confidence` — see the `document_extractions` row above) plus
+their own CHECK constraints, guarded the same `do $$ ... if not exists (select
+1 from pg_constraint ...) ...` way `document_types_ocr_kind_valid` itself was
+originally added. Deliberately does **not** insert any `document_types` rows
+for the 4 new kinds — see the `document_types` row above and the migration's
+own section 4 for why (matches `20260724010000_ocr_document_extraction.sql`'s
+own established "human tags via SQL Editor, no admin UI" precedent, per
+[0008](../decisions/0008-ocr-and-ai-case-summary.md), rather than inventing a
+new posture). Purely additive/widening: no existing column dropped, renamed,
+or retyped; no existing row touched on either table; widening a CHECK
+constraint can only keep previously-valid rows valid, never invalidate one.
+No RLS policy or PostgREST-visible function changed, so no `notify pgrst,
+'reload schema';` is needed.
+
 ## Enums
 
 ```
@@ -213,7 +245,10 @@ have no DELETE policy at all, by design (deactivate only).
 
 `document_extractions` (`20260724010000_ocr_document_extraction.sql`) follows the
 same visibility-via-`EXISTS` pattern, joined through `documents → loan_cases`.
-`STAFF_ROLES` can insert; no update/delete policy at all — append-only.
+`STAFF_ROLES` can insert; no update/delete policy at all — append-only. Unchanged
+by `20260802010000_document_screening_confidence_validation.sql` — that migration
+only widens a CHECK constraint and adds nullable columns, both already covered by
+these existing policies (no column-level RLS anywhere in this repo).
 
 `loan_case_timeline_events` (`20260725010000_loan_workflow.sql`) — same pattern,
 `STAFF_ROLES` insert-only, append-only.
