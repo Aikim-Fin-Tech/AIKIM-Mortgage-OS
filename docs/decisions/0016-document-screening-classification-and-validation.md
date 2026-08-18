@@ -1,6 +1,6 @@
 # 0016. Document Screening — Classification vs. Human Assignment, and Confidence/Validation Ownership
 
-Status: Proposed (design pass complete, no code/migration written yet)
+Status: Accepted — migrations executed and verified against production; code committed and pushed; not yet wired into any UI or exercised against a real document
 Date: 2026-08-07
 
 ## Context
