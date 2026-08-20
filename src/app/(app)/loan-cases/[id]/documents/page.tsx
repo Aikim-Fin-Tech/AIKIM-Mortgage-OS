@@ -46,7 +46,11 @@ export default async function LoanCaseDocumentsPage({ params }: PageProps) {
       )}
 
       <div className="mt-6">
-        <RequiredDocumentsSection rows={requiredResult.rows} completionPercent={requiredResult.completionPercent} />
+        <RequiredDocumentsSection
+          rows={requiredResult.rows}
+          completionPercent={requiredResult.completionPercent}
+          error={requiredResult.error}
+        />
       </div>
 
       <div className="mt-8">

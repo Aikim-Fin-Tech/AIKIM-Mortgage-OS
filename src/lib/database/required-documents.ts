@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { RequiredDocumentRow } from "@/lib/mortgage-rules/types";
+import { asOcrDocumentKind, buildMandatoryLookupKey, resolveIsMandatory } from "./required-document-derivation";
 
 /**
  * Read-only data access for the Documents tab's "Required Documents"
@@ -7,15 +8,24 @@ import type { RequiredDocumentRow } from "@/lib/mortgage-rules/types";
  * which lists what's actually been *uploaded* — this module lists what the
  * matched mortgage rule says *should* be uploaded, and computes completion
  * live against the documents table (never a stored, potentially-stale flag).
+ * Field-derivation logic (is_mandatory lookup, ocr_kind validation) lives in
+ * the pure, dependency-free ./required-document-derivation.ts.
  */
+
+type DocumentTypeEmbed = {
+  name: string;
+  ocr_kind: string | null;
+  document_categories: { name: string } | { name: string }[] | null;
+};
 
 type RequiredDocRow = {
   id: string;
   document_type_id: string;
+  mortgage_rule_id: string | null;
   required_count: number;
   required_months: number | null;
   state: "active" | "not_required";
-  document_types: { name: string; document_categories: { name: string } | { name: string }[] | null } | { name: string; document_categories: { name: string } | { name: string }[] | null }[] | null;
+  document_types: DocumentTypeEmbed | DocumentTypeEmbed[] | null;
 };
 
 function normalizeEmbed<T>(value: T | T[] | null): T | null {
@@ -54,7 +64,9 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
     const [requiredResult, uploadedResult] = await Promise.all([
       supabase
         .from("loan_case_required_documents")
-        .select("id, document_type_id, required_count, required_months, state, document_types ( name, document_categories ( name ) )")
+        .select(
+          "id, document_type_id, mortgage_rule_id, required_count, required_months, state, document_types ( name, ocr_kind, document_categories ( name ) )",
+        )
         .eq("loan_case_id", caseRow.id),
       supabase.from("documents").select("document_type_id").eq("loan_case_id", caseRow.id),
     ]);
@@ -81,6 +93,29 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
 
     const rawRows = (requiredResult.data ?? []) as RequiredDocRow[];
 
+    const ruleIds = [...new Set(rawRows.map((row) => row.mortgage_rule_id).filter((id): id is string => id !== null))];
+
+    const mandatoryByKey = new Map<string, boolean>();
+    if (ruleIds.length > 0) {
+      const { data: ruleDocRows, error: ruleDocsError } = await supabase
+        .from("mortgage_rule_documents")
+        .select("mortgage_rule_id, document_type_id, is_mandatory")
+        .in("mortgage_rule_id", ruleIds);
+
+      if (ruleDocsError) {
+        // Non-fatal: is_mandatory degrades to null (never a guessed default)
+        // for every row rather than failing the whole checklist read.
+        console.error(
+          `[getRequiredDocuments] mortgage_rule_documents lookup failed for ${caseNumber}. code=${ruleDocsError.code ?? "unknown"} message=${ruleDocsError.message}`,
+        );
+      } else {
+        for (const ruleDoc of ruleDocRows ?? []) {
+          const key = buildMandatoryLookupKey(ruleDoc.mortgage_rule_id, ruleDoc.document_type_id);
+          if (key !== null) mandatoryByKey.set(key, ruleDoc.is_mandatory);
+        }
+      }
+    }
+
     const rows: RequiredDocumentRow[] = rawRows.map((row) => {
       const docType = normalizeEmbed(row.document_types);
       const category = docType ? normalizeEmbed(docType.document_categories) : null;
@@ -98,6 +133,8 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
         requiredMonths: row.required_months,
         uploadedCount,
         status,
+        isMandatory: resolveIsMandatory(row.mortgage_rule_id, row.document_type_id, mandatoryByKey),
+        ocrKind: asOcrDocumentKind(docType?.ocr_kind ?? null),
       };
     });
 
