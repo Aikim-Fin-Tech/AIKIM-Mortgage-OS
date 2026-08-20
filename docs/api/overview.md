@@ -52,7 +52,8 @@ TypeScript, not SQL. See
 ## OCR (`src/lib/ocr/*.ts`)
 
 - `OCRProvider` interface (`types.ts`) — the only thing application code depends on.
-- `GeminiOCRProvider` (`gemini-provider.ts`) — sole implementation, Gemini 2.5 Pro,
+- `GeminiOCRProvider` (`gemini-provider.ts`) — sole implementation, currently
+  `gemini-3.5-flash` (see [../decisions/0017-migrate-gemini-model-to-3.5-flash.md](../decisions/0017-migrate-gemini-model-to-3.5-flash.md)),
   structured-output mode (`responseSchema`).
 - `getOCRProvider()` (`get-ocr-provider.ts`) — the one factory/swap point.
 - `getGeminiClient()` (`src/lib/ai/get-gemini-client.ts`) — shared client construction,

@@ -17,7 +17,7 @@ and [docs/README.md](docs/README.md) for the full documentation index.
 ## Stack
 
 Next.js 16.2.10 (App Router, Turbopack), React 19.2.4, Tailwind CSS 4,
-Supabase (Postgres + Auth + Storage + PostgREST), Gemini 2.5 Pro (OCR + AI
+Supabase (Postgres + Auth + Storage + PostgREST), Gemini 3.5 Flash (OCR + AI
 summary). No separate backend service.
 
 > Next.js 16 has breaking changes from typical training data — read

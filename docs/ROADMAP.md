@@ -12,7 +12,9 @@ Everything in the single `6f73121` checkpoint commit:
 - Document Management (upload/preview/download/delete)
 - Borrower Profile + Mortgage Rules Engine + generated checklist
 - Mortgage Rule Admin UI (**frozen** immediately after completion — see below)
-- OCR (Gemini 2.5 Pro) + AI Case Summary
+- OCR (Gemini-based, currently `gemini-3.5-flash` — see
+  [ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md)) + AI Case
+  Summary
 - Loan Status pipeline (7 states), Case Timeline, Checklist Progress, Next
   Action Card, Loan Health Score
 
@@ -35,9 +37,14 @@ The immediate next work, in the order it's actually unblockable:
    (`20260716000000_loan_case_creation.sql`,
    `20260716010000_fix_create_loan_case_rpc.sql`) were superseded and
    intentionally never run.
-2. **Resolve Gemini billing** — **Not Started, blocked.** Upgrade the Google
-   Cloud project so `gemini-2.5-pro` has real quota; re-verify OCR/AI Summary
-   against an actual NRIC and salary slip.
+2. **Resolve Gemini model deprecation** — **Done.** The real blocker was not
+   billing/quota as originally recorded here — the configured model
+   (`gemini-2.5-pro`) had been deprecated by Google (HTTP 404, "no longer
+   available to new users"). Migrated to `gemini-3.5-flash` and verified
+   end-to-end (PD-017 Phase A): automatic classification and field
+   extraction both PASS against a live Gemini call on a fully synthetic test
+   document, no provider error. See
+   [ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md).
 3. **Seed real mortgage rule data** — **Not Started, blocked.** The
    `mortgage_rules` schema is live but has zero rows. Requires unfreezing the
    Rule Admin UI, or a human authoring rows directly via SQL in the interim.

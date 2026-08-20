@@ -67,8 +67,10 @@ If a future task requires one, it is new scope — do not assume any exists.
 
 ## AI Engine
 
-**Gemini 2.5 Pro**, for two purposes: OCR field extraction and AI Case Summary's
-next-action text. Full detail: [AI_ENGINE.md](AI_ENGINE.md). Headline
+**The configured Gemini OCR provider**, currently `gemini-3.5-flash` (see
+[ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md)), for two
+purposes: OCR field extraction and AI Case Summary's next-action text. Full
+detail: [AI_ENGINE.md](AI_ENGINE.md). Headline
 architectural fact: the matching/business logic (rule engine, health score,
 next-action rules) is deliberately **not** AI — only OCR and one summary field
 call an LLM at all.

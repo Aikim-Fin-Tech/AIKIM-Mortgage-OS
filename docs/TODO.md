@@ -13,9 +13,14 @@ here is invented — items without a clear source are marked as such.
       pull. Producing a real baseline is a standing priority.
 - [ ] **Zero mortgage rule data seeded.** The Rule Engine works but has
       nothing to match against.
-- [ ] **Gemini billing** — `gemini-2.5-pro` returns `429 quota exceeded,
-      limit: 0` on the free tier for the configured API key/project. OCR and
-      AI Case Summary cannot process a real document until this is resolved.
+- [x] **Gemini model deprecation** — **Resolved.** Originally recorded here
+      as a billing/quota problem (`429 quota exceeded`); the actual cause was
+      an HTTP 404 — the configured model (`gemini-2.5-pro`) had been
+      deprecated by Google, not a quota limit. Migrated to `gemini-3.5-flash`
+      and verified end-to-end (PD-017 Phase A): automatic classification and
+      field extraction both PASS against a live Gemini call on a fully
+      synthetic test document, no provider error. See
+      [ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md).
 - [ ] **No deployment target exists.** See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Open Product Questions (need a decision before work can start)

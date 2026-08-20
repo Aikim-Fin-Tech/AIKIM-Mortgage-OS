@@ -23,7 +23,7 @@ unscoped direction (customer portal, multi-branch, analytics): [docs/business/pr
 ## 2. Current Progress
 
 **Stack**: Next.js 16.2.10 (App Router, Turbopack), React 19.2.4, Tailwind CSS 4,
-Supabase (Postgres + Auth + Storage + PostgREST), Gemini 2.5 Pro (OCR + AI
+Supabase (Postgres + Auth + Storage + PostgREST), Gemini 3.5 Flash (OCR + AI
 summary). No separate backend service — Server Actions and Supabase are the
 entire backend. Full detail: [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -53,7 +53,7 @@ hard project rule, not an oversight — see [DATABASE.md](DATABASE.md) and
 | Borrower Profile | 4 fields on Loan Case (nationality, income country, employment type, income structure) |
 | Mortgage Rules Engine | Database-driven rule matching (wildcard + most-specific-wins), generates a per-case required-document checklist |
 | Mortgage Rule Admin | `super_admin`-only UI to manage rules/documents/categories — **frozen** (paused, not abandoned) |
-| OCR | NRIC + salary slip extraction via Gemini 2.5 Pro, behind a swappable `OCRProvider` interface |
+| OCR | NRIC + salary slip extraction via the configured Gemini OCR provider (currently `gemini-3.5-flash`), behind a swappable `OCRProvider` interface |
 | AI Case Summary | Customer/Employment/Income/Missing Docs/Status computed live; AI-generated "next action" on request only |
 | Loan Processing Workflow | 7-state status pipeline, case Timeline, Checklist progress, rule-based Next Action card, Loan Health Score (no AI) |
 
@@ -81,11 +81,13 @@ See [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) for exact file locations per mo
 - **No mortgage rule data exists.** The rules engine works, but zero real rules are
   seeded — every case will show "no rule matched" until a `super_admin` authors
   real ones (and that admin UI is currently frozen).
-- **OCR is wired but unverified against a real document.** `@google/generative-ai`
-  is installed, `GEMINI_API_KEY` is configured, and the pipeline was proven
-  end-to-end with synthetic test fixtures — real use is blocked only on the
-  Google Cloud project's Gemini billing tier (`gemini-2.5-pro` returned `429
-  quota exceeded, limit: 0` on the free tier at last check).
+- **OCR is verified end-to-end with a live Gemini call.** `@google/generative-ai`
+  is installed, `GEMINI_API_KEY` is configured, and PD-017 Phase A confirmed
+  clean automatic classification and field extraction (PASS) against a fully
+  synthetic test document — no provider error. Now running on
+  `gemini-3.5-flash`, migrated after `gemini-2.5-pro` was deprecated (HTTP
+  404, not the billing/quota issue this line used to describe) — see
+  [ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md).
 - **`npx tsc --noEmit`, `npm run lint`, `npm run build` are all clean** as of the
   last checkpoint commit.
 

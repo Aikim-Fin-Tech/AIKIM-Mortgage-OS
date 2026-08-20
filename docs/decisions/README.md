@@ -41,6 +41,7 @@ session strategy, a new architectural pattern.
 | [0014](0014-eligibility-engine-implementation.md) | Eligibility Engine Implementation — Sprint 6.3C | Proposed (migrations authored, not confirmed run) |
 | [0015](0015-aikim-standard-baseline-seeding.md) | AIKIM Standard Baseline Seeding | Accepted |
 | [0016](0016-document-screening-classification-and-validation.md) | Document Screening — classification vs. human assignment, confidence/validation ownership — Sprint 2 | Accepted — migrations executed, code committed; not yet wired into UI or exercised against a real case |
+| [0017](0017-migrate-gemini-model-to-3.5-flash.md) | Migrate Gemini model from 2.5 Pro to 3.5 Flash | Accepted — verified end-to-end with clean synthetic classification and extraction |
 
 "Retroactive" means the decision was already implemented in the codebase before this
 ADR was written; the ADR documents evidence found in code, it does not introduce a

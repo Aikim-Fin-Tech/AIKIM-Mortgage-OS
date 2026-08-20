@@ -38,7 +38,7 @@ matching are explicitly out of scope until approved — see
 
 ## Document Analysis (OCR)
 
-- **Provider**: Gemini 2.5 Pro (`gemini-2.5-pro`), via `@google/generative-ai`.
+- **Provider**: configured Gemini OCR provider, currently `gemini-3.5-flash` (`src/lib/ocr/gemini-provider.ts`), via `@google/generative-ai`. See [ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md) — migrated from `gemini-2.5-pro` after that model was deprecated.
 - **Interface**: `OCRProvider` (`src/lib/ocr/types.ts`) — the only thing
   application code depends on. `GeminiOCRProvider` is the sole implementation;
   swapping providers means adding a new class and changing one line in
@@ -54,10 +54,13 @@ matching are explicitly out of scope until approved — see
 - **Storage**: every attempt (success or failure) is stored as a new
   `document_extractions` row — append-only, nothing is silently retried over a
   past result.
-- **Verification status**: proven working end-to-end against synthetic test
-  fixtures (a hand-built minimal PDF). Real documents have never been
-  processed — blocked on the Google Cloud project's Gemini billing tier
-  (`429 quota exceeded, limit: 0` on the free tier for `gemini-2.5-pro`).
+- **Verification status**: verified end-to-end (PD-017 Phase A) with a live
+  Gemini call against a fully synthetic test document — automatic
+  classification and field extraction both PASS, no provider error. An
+  earlier real-call attempt had failed, but not on the billing/quota limit
+  this section used to describe — the actual cause was an HTTP 404 for the
+  then-configured `gemini-2.5-pro` model, which Google had deprecated. See
+  [ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md).
 
 ## Knowledge Engine
 

@@ -19,8 +19,12 @@ comment.
 Everything else is paused. The only question for new work: "will this help the
 first banker use AIKIM in a real loan case?" P0 order:
 
-1. OCR (NRIC, salary slip) — Gemini 2.5 Pro, behind an `OCRProvider` interface. Done,
-   verified working end-to-end (synthetic fixtures) pending Gemini billing.
+1. OCR (NRIC, salary slip) — currently `gemini-3.5-flash`, behind an
+   `OCRProvider` interface. Done, verified end-to-end with a live Gemini call
+   against a fully synthetic test document (PD-017 Phase A: automatic
+   classification and extraction both PASS, no provider error). Migrated
+   from `gemini-2.5-pro` after that model was deprecated — see
+   [../decisions/0017-migrate-gemini-model-to-3.5-flash.md](../decisions/0017-migrate-gemini-model-to-3.5-flash.md).
 2. AI Case Summary card. Done.
 3. ~~Dashboard buckets~~ — superseded by MVP Sprint Day 2's expanded loan status
    pipeline (see below); still not started, still needs product input (Open

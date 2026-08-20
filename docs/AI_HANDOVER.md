@@ -23,7 +23,7 @@ PII (NRIC, income). Full vision: [docs/product/vision.md](product/vision.md).
 - **Stack**: Next.js 16.2.10 (App Router, Turbopack — has breaking changes
   from typical training data, read root `AGENTS.md` before writing framework
   code), React 19.2.4, Tailwind CSS 4, Supabase (Postgres/Auth/Storage/
-  PostgREST), Gemini 2.5 Pro.
+  PostgREST), Gemini 3.5 Flash.
 - **Build health**: `npx tsc --noEmit` and `npm run lint` are both clean on
   the full tree, including the Sprint 6.3 (Mortgage Knowledge Database) code
   and Alpha-001 (Mortgage Assessment UI, `npm run build` also clean per
@@ -72,8 +72,12 @@ PII (NRIC, income). Full vision: [docs/product/vision.md](product/vision.md).
   against a real case either.
 - **Deployment**: none. Not hosted anywhere.
 - **AI (Gemini)**: package installed, API key configured, pipeline verified
-  end-to-end with synthetic test fixtures — but blocked on Gemini billing for
-  real documents (`429 quota exceeded, limit: 0` on `gemini-2.5-pro`).
+  end-to-end with a live call against a fully synthetic test document —
+  automatic classification and field extraction both PASS (PD-017 Phase A),
+  no provider error. Now running on `gemini-3.5-flash`, migrated after
+  `gemini-2.5-pro` was deprecated (HTTP 404, not the billing/quota issue this
+  line used to describe) — see
+  [ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md).
 
 Full detail: [CURRENT_STATUS.md](CURRENT_STATUS.md).
 
@@ -168,7 +172,9 @@ Full reasoning for each: [docs/decisions/](decisions/README.md).
 7. **No hard delete of a `mortgage_rules` row, ever** — deactivate only, no
    DELETE RLS policy exists. Category is always derived from
    `document_types.category_id`, never duplicated.
-8. **OCR/AI use Gemini 2.5 Pro** behind an `OCRProvider` interface so the
+8. **OCR/AI use the configured Gemini OCR provider** (currently
+   `gemini-3.5-flash`, see [ADR 0017](decisions/0017-migrate-gemini-model-to-3.5-flash.md))
+   behind an `OCRProvider` interface so the
    provider can be swapped later without touching application code. Only
    OCR and one summary field are AI — everything else (health score, next
    action, rule matching) is deterministic.
