@@ -8,10 +8,10 @@ import type {
   OCRProvider,
 } from "./types";
 
-const MODEL_NAME = "gemini-2.5-pro";
+const MODEL_NAME = "gemini-3.5-flash";
 
 /**
- * Gemini 2.5 Pro implementation of OCRProvider. Uses Gemini's structured
+ * Gemini 3.5 Flash implementation of OCRProvider. Uses Gemini's structured
  * output mode (responseSchema) so the model is constrained to return exactly
  * the shape we ask for — "Structured JSON" per the architecture, not free
  * text we then have to parse/guess at.

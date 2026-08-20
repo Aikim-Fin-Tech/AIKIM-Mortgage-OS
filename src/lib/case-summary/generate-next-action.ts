@@ -2,7 +2,7 @@ import "server-only";
 import { getGeminiClient } from "@/lib/ai/get-gemini-client";
 import type { CaseSummaryData } from "./types";
 
-const MODEL_NAME = "gemini-2.5-pro";
+const MODEL_NAME = "gemini-3.5-flash";
 
 /**
  * The only AI-generated field on the Case Summary card — a short, concrete
