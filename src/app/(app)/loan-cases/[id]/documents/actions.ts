@@ -360,8 +360,8 @@ const OCR_KIND_LABELS: Record<OCRDocumentKind, string> = {
 };
 
 /**
- * Runs OCR (Gemini 2.5 Pro, via the OCRProvider interface — see
- * src/lib/ocr/) on an already-uploaded document and stores the result as a
+ * Runs OCR using the configured OCR provider (via the OCRProvider interface —
+ * see src/lib/ocr/) on an already-uploaded document and stores the result as a
  * new document_extractions row. Every attempt is stored, including
  * failures — never silently retried over a past record.
  */
