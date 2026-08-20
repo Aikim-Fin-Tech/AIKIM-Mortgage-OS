@@ -7,6 +7,8 @@
  * to rewrite the matcher out of Postgres later.
  */
 
+import type { OCRDocumentKind } from "@/lib/ocr/types";
+
 export type BorrowerProfile = {
   nationality: string | null;
   incomeCountry: string | null;
@@ -42,6 +44,20 @@ export type RequiredDocumentRow = {
   uploadedCount: number;
   /** Derived, never stored: "not_required" wins; otherwise uploadedCount >= requiredCount. */
   status: "completed" | "missing" | "not_required";
+  /**
+   * From the matched rule's mortgage_rule_documents.is_mandatory, looked up
+   * live at read time (loan_case_required_documents itself has no such
+   * column). Null when the originating rule-document line item can no
+   * longer be found (e.g. edited/removed from the rule since this case's
+   * checklist was generated) — never defaulted to true or false.
+   */
+  isMandatory: boolean | null;
+  /**
+   * From document_types.ocr_kind. Null means this document type has no OCR
+   * template yet — it still belongs on the checklist, just as a manual
+   * review item, never an error state.
+   */
+  ocrKind: OCRDocumentKind | null;
 };
 
 // ---------------------------------------------------------------------------
