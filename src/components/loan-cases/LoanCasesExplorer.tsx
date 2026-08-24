@@ -166,7 +166,7 @@ export function LoanCasesExplorer({ cases }: { cases: LoanCase[] }) {
                 <Link
                   href={`/loan-cases/${loanCase.id}`}
                   onClick={(event) => event.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600 hover:text-emerald-700"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
                 >
                   View
                   <ArrowRightIcon className="h-3.5 w-3.5" />

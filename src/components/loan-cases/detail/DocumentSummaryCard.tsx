@@ -32,7 +32,7 @@ export function DocumentSummaryCard({
         <h2 className="text-base font-semibold text-slate-900">Document Summary</h2>
         <Link
           href={`/loan-cases/${caseNumber}/documents`}
-          className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+          className="text-sm font-medium text-blue-600 hover:text-blue-700"
         >
           View All Documents
         </Link>

@@ -34,7 +34,7 @@ export function CaseProgressCard({ caseDetail }: { caseDetail: CaseDetail }) {
               content = "✕";
               labelClasses = "font-semibold text-rose-700";
             } else {
-              circleClasses = "border-2 border-emerald-600 text-emerald-600";
+              circleClasses = "border-2 border-blue-600 text-blue-600";
               labelClasses = "font-semibold text-slate-900";
             }
           }

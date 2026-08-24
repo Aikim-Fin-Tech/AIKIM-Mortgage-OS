@@ -44,7 +44,7 @@ export function RequiredDocumentsSection({
             <p className="text-xs text-slate-400">Pending</p>
           </div>
           <div className="text-center sm:text-right">
-            <p className="text-lg font-semibold text-emerald-600">
+            <p className="text-lg font-semibold text-blue-600">
               {completionPercent === null ? "—" : `${completionPercent}%`}
             </p>
             <p className="text-xs text-slate-400">Overall Completion</p>

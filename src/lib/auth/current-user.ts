@@ -24,6 +24,19 @@ export function formatRoleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role;
 }
 
+const ROLE_PERMISSION_SUMMARIES: Record<string, string> = {
+  super_admin: "Full administrative access, including Settings (Mortgage Rules, Document Categories).",
+  banker: "Can create and manage assigned loan cases, and upload/manage their documents.",
+  property_agent: "Can create and manage assigned loan cases, and upload/manage their documents.",
+  mortgage_outsource_agent: "Can create and manage assigned loan cases, and upload/manage their documents.",
+  customer: "Can view their own loan case and its documents.",
+};
+
+/** Read-only descriptive text for the My Profile page — informational only, never used for an authorization decision (RLS is). */
+export function formatPermissionSummary(role: string): string {
+  return ROLE_PERMISSION_SUMMARIES[role] ?? "No specific permissions on file for this role.";
+}
+
 /**
  * Retrieves the currently authenticated user on the server, verified against
  * Supabase's auth server (via `getUser()`), plus their full_name and role from

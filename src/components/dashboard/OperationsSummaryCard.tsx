@@ -23,7 +23,7 @@ export function OperationsSummaryCard({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
           <AIIcon className="h-5 w-5" />
         </span>
         <div>
@@ -37,7 +37,7 @@ export function OperationsSummaryCard({
           const Icon = item.icon;
           return (
             <li key={item.label} className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
-              <Icon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <Icon className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
               <span className="text-sm text-slate-700">{item.label}</span>
             </li>
           );

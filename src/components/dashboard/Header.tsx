@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MenuIcon } from "./icons";
 import { LogoutButton } from "@/components/auth/LogoutButton";
@@ -55,13 +56,15 @@ export function Header({
         <NotificationCenter items={activityItems} />
 
         <div className="flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
-            {getInitials(displayName)}
-          </span>
-          <div className="hidden leading-tight sm:block">
-            <p className="max-w-[160px] truncate text-sm font-medium text-slate-900">{displayName}</p>
-            <p className="text-xs text-slate-500">{displayRole}</p>
-          </div>
+          <Link href="/profile" className="flex items-center gap-2 rounded-lg py-1 hover:bg-slate-50" title="My Profile">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+              {getInitials(displayName)}
+            </span>
+            <div className="hidden leading-tight sm:block">
+              <p className="max-w-[160px] truncate text-sm font-medium text-slate-900">{displayName}</p>
+              <p className="text-xs text-slate-500">{displayRole}</p>
+            </div>
+          </Link>
           <LogoutButton />
         </div>
       </div>

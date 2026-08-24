@@ -55,7 +55,7 @@ export function NotificationCenter({ items }: { items: ActivityItem[] }) {
       >
         <BellIcon className="h-5 w-5" />
         {items.length > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-semibold text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold text-white">
             {items.length}
           </span>
         )}

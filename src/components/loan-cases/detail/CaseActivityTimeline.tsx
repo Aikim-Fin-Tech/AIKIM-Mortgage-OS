@@ -21,7 +21,7 @@ export function CaseActivityTimeline({ activity }: { activity: ActivityItem[] })
         <ol className="mt-4 space-y-4">
           {activity.map((item) => (
             <li key={item.id} className="flex gap-3">
-              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
               <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-900">{item.label}</p>
                 <p className="text-sm text-slate-600">{item.description}</p>

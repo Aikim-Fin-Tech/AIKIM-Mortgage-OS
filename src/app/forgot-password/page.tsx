@@ -1,6 +1,6 @@
-import { LoginForm } from "@/components/auth/LoginForm";
+import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   return (
     <div className="flex min-h-full items-center justify-center bg-slate-50 px-4 py-12">
       <div className="w-full max-w-sm">
@@ -11,11 +11,11 @@ export default function LoginPage() {
           <h1 className="mt-4 text-lg font-semibold tracking-tight text-slate-900">
             AIKIM <span className="text-blue-600">Mortgage OS</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Sign in to manage your mortgage operations.</p>
+          <p className="mt-1 text-sm text-slate-500">Reset your password.</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <LoginForm />
+          <ForgotPasswordForm />
         </div>
       </div>
     </div>

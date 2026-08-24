@@ -9,7 +9,16 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 const PUBLIC_PATH_PREFIXES = [
   "/login",
-  "/auth", // reserved for future auth callback routes (e.g. email confirmation, OAuth)
+  "/auth", // recovery-link callback route, src/app/auth/confirm
+  "/forgot-password",
+  // Public so the expired/invalid-link state can render even when
+  // verifyOtp() in /auth/confirm failed and no session was established —
+  // otherwise this proxy would redirect that visitor to /login before the
+  // page's own expired-link UI ever got a chance to render. When a real
+  // recovery session exists, this page renders the password form instead;
+  // either way, it re-derives that from the session itself, never from a
+  // client-supplied param.
+  "/reset-password",
 ];
 
 function isPublicPath(pathname: string): boolean {

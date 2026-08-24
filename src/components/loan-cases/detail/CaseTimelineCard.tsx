@@ -27,7 +27,7 @@ export function CaseTimelineCard({ entries }: { entries: TimelineEntry[] }) {
         <ol className="mt-4 space-y-4">
           {entries.map((entry) => (
             <li key={entry.id} className="flex gap-3">
-              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
               <div className="min-w-0">
                 <p className="text-sm text-slate-900">{entry.description}</p>
                 <p className="mt-0.5 text-xs text-slate-400">
