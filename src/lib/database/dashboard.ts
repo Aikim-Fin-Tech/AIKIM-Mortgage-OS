@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { STATUS_LABELS, type LoanStage, type LoanStatus } from "@/lib/loan-cases-data";
+import { shouldFetchDashboardAuditLogs } from "./decide-dashboard-audit-access";
 
 /**
  * Read-only data access for the Dashboard.
@@ -183,9 +185,10 @@ async function fetchDocuments(): Promise<{ rows: DocumentRow[]; error: string | 
  * row snapshots (to_jsonb of the row), so comparing their `status` field tells
  * us whether a status actually changed, not just that *something* changed.
  *
- * Note: audit_logs is restricted by RLS to super_admin only (see Sprint 4
- * schema). For any other role this legitimately returns zero rows — that is
- * correct behaviour, not a bug, and is treated as a safe empty state below.
+ * audit_logs is restricted by RLS to super_admin only (see Sprint 4 schema).
+ * Only called for a super_admin caller — see shouldFetchDashboardAuditLogs
+ * in getDashboardData() below; every other role skips this query entirely
+ * rather than relying on it to fail or empty-result gracefully.
  */
 async function fetchTodaysLoanCaseAudit(): Promise<{ rows: AuditTransitionRow[]; error: string | null }> {
   try {
@@ -219,12 +222,25 @@ async function fetchTodaysLoanCaseAudit(): Promise<{ rows: AuditTransitionRow[];
  * fails, the others' numbers still come through — the failing section falls
  * back to safe zero values and its message is added to `errors`, never
  * crashing the page and never re-introducing mock data.
+ *
+ * The audit_logs query is only attempted for a super_admin caller (see
+ * shouldFetchDashboardAuditLogs) — audit_logs is RLS-restricted to
+ * super_admin only, so for every other role this is skipped entirely rather
+ * than attempted and folded into `errors`, which previously surfaced a
+ * misleading "temporarily unavailable" banner for every Banker. Role is
+ * re-derived server-side via getCurrentUser() here, never trusted from a
+ * caller-supplied parameter. This does not change what any role can read —
+ * RLS on audit_logs is unchanged — it only stops the app from attempting (and
+ * mis-reporting the outcome of) a query no non-admin could ever succeed at.
  */
 export async function getDashboardData(): Promise<DashboardData> {
+  const currentUser = await getCurrentUser();
+  const canReadAuditLogs = shouldFetchDashboardAuditLogs(currentUser?.role ?? null);
+
   const [loanCasesResult, documentsResult, auditTodayResult] = await Promise.all([
     fetchLoanCases(),
     fetchDocuments(),
-    fetchTodaysLoanCaseAudit(),
+    canReadAuditLogs ? fetchTodaysLoanCaseAudit() : Promise.resolve({ rows: [], error: null }),
   ]);
 
   const errors: string[] = [];
