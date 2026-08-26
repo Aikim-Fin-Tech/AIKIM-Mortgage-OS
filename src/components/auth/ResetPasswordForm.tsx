@@ -2,52 +2,45 @@
 
 import { useActionState, useId, useState } from "react";
 import Link from "next/link";
-import { login, type LoginState } from "@/app/login/actions";
+import { resetPassword, type ResetPasswordState } from "@/app/reset-password/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EyeIcon, EyeOffIcon } from "@/components/dashboard/icons";
 
-const initialState: LoginState = { error: null };
+const initialState: ResetPasswordState = { error: null, success: false };
 
-export function LoginForm() {
-  const [state, formAction, isPending] = useActionState(login, initialState);
+export function ResetPasswordForm() {
+  const [state, formAction, isPending] = useActionState(resetPassword, initialState);
   const [showPassword, setShowPassword] = useState(false);
-  const emailId = useId();
   const passwordId = useId();
+  const confirmId = useId();
+
+  if (state.success) {
+    return (
+      <div className="space-y-4 text-center">
+        <p role="status" className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          Your password has been reset. You can now sign in with your new password.
+        </p>
+        <Link href="/login" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+          Go to Sign In
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4" noValidate>
       <div>
-        <label htmlFor={emailId} className="mb-1.5 block text-sm font-medium text-slate-700">
-          Email
+        <label htmlFor={passwordId} className="mb-1.5 block text-sm font-medium text-slate-700">
+          New Password
         </label>
-        <Input
-          id={emailId}
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@aikim.com.my"
-          required
-          disabled={isPending}
-        />
-      </div>
-
-      <div>
-        <div className="mb-1.5 flex items-center justify-between">
-          <label htmlFor={passwordId} className="block text-sm font-medium text-slate-700">
-            Password
-          </label>
-          <Link href="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-            Forgot password?
-          </Link>
-        </div>
         <div className="relative">
           <Input
             id={passwordId}
             name="password"
             type={showPassword ? "text" : "password"}
-            autoComplete="current-password"
-            placeholder="Enter your password"
+            autoComplete="new-password"
+            placeholder="At least 8 characters, with a letter and a number"
             required
             disabled={isPending}
             className="pr-10"
@@ -65,6 +58,20 @@ export function LoginForm() {
         </div>
       </div>
 
+      <div>
+        <label htmlFor={confirmId} className="mb-1.5 block text-sm font-medium text-slate-700">
+          Confirm New Password
+        </label>
+        <Input
+          id={confirmId}
+          name="confirmPassword"
+          type={showPassword ? "text" : "password"}
+          autoComplete="new-password"
+          required
+          disabled={isPending}
+        />
+      </div>
+
       {state.error && (
         <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">
           {state.error}
@@ -72,7 +79,7 @@ export function LoginForm() {
       )}
 
       <Button type="submit" disabled={isPending} className="w-full justify-center">
-        {isPending ? "Signing in..." : "Sign In"}
+        {isPending ? "Resetting..." : "Reset Password"}
       </Button>
     </form>
   );

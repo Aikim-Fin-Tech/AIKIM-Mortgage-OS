@@ -113,7 +113,7 @@ export function AssessmentForm({ loanCaseId }: { loanCaseId: string }) {
               id="isToBeSettled"
               name="isToBeSettled"
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
             />
             <label htmlFor="isToBeSettled" className="text-sm font-medium text-slate-700">
               To be settled before drawdown

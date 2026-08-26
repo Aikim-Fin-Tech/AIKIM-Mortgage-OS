@@ -58,8 +58,8 @@ export default async function DashboardPage() {
         <div className="flex flex-col items-start gap-2 sm:items-end">
           <Link
             href="/loan-cases/new"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5
-              text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5
+              text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700"
           >
             <PlusIcon className="h-4 w-4" />
             New Loan Case

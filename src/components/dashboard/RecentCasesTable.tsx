@@ -18,7 +18,7 @@ export function RecentCasesTable({ cases }: { cases: RecentCase[] }) {
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
         <h2 className="text-base font-semibold text-slate-900">Recent Loan Cases</h2>
-        <Link href="/loan-cases" className="text-sm font-medium text-emerald-600 hover:text-emerald-700">
+        <Link href="/loan-cases" className="text-sm font-medium text-blue-600 hover:text-blue-700">
           View all
         </Link>
       </div>
@@ -41,7 +41,7 @@ export function RecentCasesTable({ cases }: { cases: RecentCase[] }) {
             {cases.map((loanCase) => (
               <tr key={loanCase.id} className="transition-colors hover:bg-slate-50">
                 <td className="px-5 py-3.5 font-medium text-slate-900 sm:px-6">
-                  <Link href={`/loan-cases/${loanCase.id}`} className="hover:text-emerald-700">
+                  <Link href={`/loan-cases/${loanCase.id}`} className="hover:text-blue-700">
                     {loanCase.id}
                   </Link>
                 </td>

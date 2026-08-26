@@ -19,7 +19,7 @@ export function ChecklistProgressCard({ caseNumber, rows }: { caseNumber: string
         <h2 className="text-base font-semibold text-slate-900">Checklist</h2>
         <Link
           href={`/loan-cases/${caseNumber}/documents`}
-          className="text-sm font-medium text-emerald-600 hover:text-emerald-700"
+          className="text-sm font-medium text-blue-600 hover:text-blue-700"
         >
           View Documents
         </Link>
@@ -33,7 +33,7 @@ export function ChecklistProgressCard({ caseNumber, rows }: { caseNumber: string
             {completedCount} / {total} <span className="text-sm font-normal text-slate-400">Completed</span>
           </p>
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${percent}%` }} />
+            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${percent}%` }} />
           </div>
           <p className="mt-1.5 text-xs text-slate-400">{percent}% complete</p>
         </>

@@ -51,11 +51,11 @@ export function Sidebar({ userRole }: { userRole: string | null }) {
           peer-checked:translate-x-0 md:static md:z-auto md:translate-x-0"
       >
         <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-slate-200 px-6">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
             A
           </span>
           <span className="truncate text-[15px] font-semibold tracking-tight text-slate-900">
-            AIKIM <span className="text-emerald-600">Mortgage OS</span>
+            AIKIM <span className="text-blue-600">Mortgage OS</span>
           </span>
         </div>
 
@@ -72,7 +72,7 @@ export function Sidebar({ userRole }: { userRole: string | null }) {
                 href={item.href}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-emerald-50 text-emerald-700"
+                    ? "bg-blue-50 text-blue-700"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >

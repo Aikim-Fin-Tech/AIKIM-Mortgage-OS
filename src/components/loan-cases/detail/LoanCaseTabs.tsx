@@ -24,7 +24,7 @@ export function LoanCaseTabs({
               href={`/loan-cases/${caseNumber}${tab.hrefSuffix}`}
               className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
                 isActive
-                  ? "border-emerald-600 text-emerald-700"
+                  ? "border-blue-600 text-blue-700"
                   : "border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700"
               }`}
             >

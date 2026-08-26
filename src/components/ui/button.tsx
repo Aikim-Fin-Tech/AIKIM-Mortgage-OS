@@ -9,7 +9,7 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
-  default: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm",
+  default: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm",
   outline: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
   ghost: "text-slate-600 hover:bg-slate-100",
   secondary: "bg-slate-900 text-white hover:bg-slate-800",
