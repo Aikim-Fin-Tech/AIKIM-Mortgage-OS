@@ -65,14 +65,6 @@ export const banks = [
   "UOB Malaysia",
 ] as const;
 
-export const bankers = [
-  "Sarah Lim",
-  "Daniel Tan",
-  "Amir Rahman",
-  "Priya Nathan",
-  "Wong Mei Ling",
-] as const;
-
 /**
  * Single source of truth for raw DB enum value -> display label, used by
  * every lib/database/*.ts file that reads loan_cases.status (dashboard.ts,

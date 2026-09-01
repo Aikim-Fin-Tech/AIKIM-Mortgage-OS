@@ -180,6 +180,24 @@ document_status: pending | verified | rejected
   `loan_cases.case_number` default.
 - `create_loan_case(...) returns loan_cases` — `SECURITY INVOKER`. See
   [../api/overview.md](../api/overview.md) for the full signature.
+  **Security fix (`20260901010000_enforce_banker_self_assignment.sql`)**:
+  originally inserted the caller-supplied `p_banker_id` into
+  `loan_cases.banker_id` unchecked beyond the FK constraint against
+  `public.bankers(id)` — any authenticated Banker who obtained another real
+  Banker's `id` (previously also exposed platform-wide by
+  `getNewLoanCaseFormOptions()`, now fixed to a self-only/case-scoped query)
+  could create a case assigned to that other Banker. The function now
+  resolves the caller's own `role` from `user_profiles`; when `role =
+  'banker'`, it looks up that Banker's own `bankers.id` (via
+  `bankers.user_profile_id`) and uses it unconditionally, ignoring
+  `p_banker_id` entirely. Every other role's `p_banker_id` is used as
+  submitted, unchanged — Super Admin's cross-Banker assignment is
+  preserved. Mirrored at the app layer by
+  `decideEffectiveBankerId()` in `src/lib/loan-cases/decide-effective-banker-id.ts`,
+  called from `src/app/(app)/loan-cases/new/actions.ts` before this RPC is
+  ever invoked, so a Banker's tampered request is already corrected before
+  it reaches the database — this RPC-level fix is what prevents the same
+  gap being exploited by calling the RPC directly, bypassing the app.
 - `create_eligibility_verdict(p_loan_case_id uuid, p_bank_product_id uuid,
   p_verdict text, p_reasons jsonb, p_derivation_result_ids uuid[]) returns
   eligibility_verdicts` — `SECURITY INVOKER`. Sprint 6.3C. Atomically inserts
