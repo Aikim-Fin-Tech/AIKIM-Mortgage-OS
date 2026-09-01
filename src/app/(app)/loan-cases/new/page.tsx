@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { NewLoanCaseForm } from "@/components/loan-cases/NewLoanCaseForm";
 import { getNewLoanCaseFormOptions } from "@/lib/database/new-loan-case";
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { ArrowLeftIcon } from "@/components/dashboard/icons";
 
 export default async function NewLoanCasePage() {
-  const options = await getNewLoanCaseFormOptions();
+  const [options, currentUser] = await Promise.all([getNewLoanCaseFormOptions(), getCurrentUser()]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:py-8">
@@ -30,7 +31,11 @@ export default async function NewLoanCasePage() {
       )}
 
       <div className="mt-6">
-        <NewLoanCaseForm customers={options.customers} bankers={options.bankers} />
+        <NewLoanCaseForm
+          customers={options.customers}
+          bankers={options.bankers}
+          assignedBankerLocked={currentUser?.role === "banker"}
+        />
       </div>
     </div>
   );

@@ -180,6 +180,58 @@ document_status: pending | verified | rejected
   `loan_cases.case_number` default.
 - `create_loan_case(...) returns loan_cases` — `SECURITY INVOKER`. See
   [../api/overview.md](../api/overview.md) for the full signature.
+  **Security fix (`20260901010000_enforce_banker_self_assignment.sql`)**:
+  originally inserted the caller-supplied `p_banker_id` into
+  `loan_cases.banker_id` unchecked beyond the FK constraint against
+  `public.bankers(id)` — any authenticated Banker who obtained another real
+  Banker's `id` (previously also exposed platform-wide by
+  `getNewLoanCaseFormOptions()`, now fixed to a self-only/case-scoped query)
+  could create a case assigned to that other Banker. The function now
+  resolves the caller's own `role` from `user_profiles`; when `role =
+  'banker'`, it looks up that Banker's own `bankers.id` (via
+  `bankers.user_profile_id`) and uses it unconditionally, ignoring
+  `p_banker_id` entirely. Every other role's `p_banker_id` is used as
+  submitted, unchanged — Super Admin's cross-Banker assignment is
+  preserved. Mirrored at the app layer by
+  `decideEffectiveBankerId()` in `src/lib/loan-cases/decide-effective-banker-id.ts`,
+  called from `src/app/(app)/loan-cases/new/actions.ts` before this RPC is
+  ever invoked, so a Banker's tampered request is already corrected before
+  it reaches the database — this RPC-level fix is what prevents the same
+  gap being exploited by calling the RPC directly, bypassing the app.
+  **Revision 2, same migration file — fail closed for an unlinked Banker**:
+  a `role = 'banker'` caller with no matching `public.bankers` row now
+  raises an exception instead of proceeding with a `null` `banker_id`.
+  Checked against a live export of `loan_cases_select_scope`
+  (`banker_id IN` their own `bankers.id` OR `assigned_agent_id = them` OR
+  `customer_id IN` their own customers) — none of those branches can ever
+  be satisfied by a `banker_id`-null case for that same Banker, so the
+  case would have silently become invisible to its own creator (visible
+  only to `super_admin`) with the RPC still reporting success. Mirrored at
+  the app layer by `shouldRejectUnlinkedBanker()` in
+  `src/lib/loan-cases/should-reject-unlinked-banker.ts`.
+- **`bankers_select_scope` / `customers_select_scope`** (RLS policies,
+  `supabase/migrations/20260901020000_restrict_banker_customer_bankers_select.sql`):
+  replace `bankers_select_authenticated` (previously: any authenticated
+  user could read every row of `public.bankers`) and
+  `customers_select_staff_or_self` (previously: every staff role, including
+  Banker, could read every row of `public.customers`) — both confirmed via
+  a live read-only Production RLS export, not guessed. Each new policy is a
+  `case current_user_role() when 'banker' then <narrow condition> else
+  <original qual, verbatim> end`: a Banker can now only read their own
+  `bankers` row (`user_profile_id = current_user_profile_id()`) and only
+  `customers` rows reachable through a `loan_cases` row where `banker_id`
+  is their own — every other role or account (Super Admin, Property Agent,
+  Mortgage Outsource Agent, a customer's own self-access, or any other
+  authenticated session) falls through to the exact original qual
+  expression, unchanged, not re-derived or inferred. An earlier draft of
+  this migration added an `assigned_agent_id`/`customer_id`-based branch to
+  `bankers_select_scope` as a guess at what Property Agent/Mortgage
+  Outsource Agent need to keep seeing an assigned Banker's name — that
+  guess was removed; their access to both tables is byte-identical to
+  today. Closes the read-exposure half of the same authorization gap
+  `create_loan_case`'s fix closes on the write side — that RPC fix alone
+  only narrows what the Next.js app *asks for*, not what a Banker's own
+  session could read directly via the Supabase REST API.
 - `create_eligibility_verdict(p_loan_case_id uuid, p_bank_product_id uuid,
   p_verdict text, p_reasons jsonb, p_derivation_result_ids uuid[]) returns
   eligibility_verdicts` — `SECURITY INVOKER`. Sprint 6.3C. Atomically inserts

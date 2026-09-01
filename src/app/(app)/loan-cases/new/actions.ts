@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentBanker } from "@/lib/auth/current-banker";
 import { STAFF_ROLES } from "@/lib/auth/staff-roles";
+import { decideEffectiveBankerId } from "@/lib/loan-cases/decide-effective-banker-id";
+import { shouldRejectUnlinkedBanker } from "@/lib/loan-cases/should-reject-unlinked-banker";
 
 // Raw enum values that actually exist in public.loan_stage / public.loan_status
 // (see Sprint 4 schema) — not guessed.
@@ -117,6 +120,33 @@ export async function createLoanCase(
   }
 
   const values = result.data;
+
+  // Never trust bankerId as submitted by a Banker client — a Banker's own
+  // banker_id always overrides whatever was in the form/request, even a
+  // tampered request carrying another real Banker's UUID (previously the
+  // only check was that the UUID satisfied loan_cases.banker_id's foreign
+  // key, i.e. it just had to belong to *some* real Banker). This is the
+  // app-layer half of the fix; create_loan_case itself enforces the same
+  // rule again at the database layer so this cannot be bypassed by calling
+  // the RPC directly. See decide-effective-banker-id.ts and
+  // supabase/migrations/20260901010000_enforce_banker_self_assignment.sql.
+  const ownBanker = currentUser.role === "banker" ? await getCurrentBanker() : null;
+
+  // Fail closed rather than silently creating an "Unassigned" case: against
+  // the live loan_cases_select_scope policy, a Banker with no linked
+  // bankers row can never see a banker_id-null case (it doesn't match any
+  // of that policy's OR branches for them), so proceeding here would create
+  // a case that immediately vanishes from its own creator's view with no
+  // explanation. See should-reject-unlinked-banker.ts.
+  if (shouldRejectUnlinkedBanker(currentUser.role, ownBanker?.id ?? null)) {
+    return {
+      fieldErrors: {},
+      formError: "Your account is not linked to a Banker record. Contact an administrator.",
+    };
+  }
+
+  const effectiveBankerId = decideEffectiveBankerId(currentUser.role, ownBanker?.id ?? null, values.bankerId || null);
+
   const supabase = await createClient();
 
   const { data: newCase, error } = await supabase.rpc("create_loan_case", {
@@ -132,7 +162,7 @@ export async function createLoanCase(
     p_bank_name: values.bankName,
     p_stage: values.stage,
     p_status: values.status,
-    p_banker_id: values.bankerId || null,
+    p_banker_id: effectiveBankerId,
   });
 
   if (error) {

@@ -16,13 +16,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PlusIcon, SearchIcon, ArrowRightIcon } from "@/components/dashboard/icons";
-import {
-  banks,
-  bankers,
-  statuses,
-  statusBadgeVariant,
-  type LoanCase,
-} from "@/lib/loan-cases-data";
+import { banks, statuses, statusBadgeVariant, type LoanCase } from "@/lib/loan-cases-data";
+import { deriveBankerFilterOptions } from "@/lib/loan-cases/derive-banker-filter-options";
 
 const FILTER_ALL = "all";
 
@@ -32,6 +27,7 @@ export function LoanCasesExplorer({ cases }: { cases: LoanCase[] }) {
   const [statusFilter, setStatusFilter] = useState(FILTER_ALL);
   const [bankFilter, setBankFilter] = useState(FILTER_ALL);
   const [bankerFilter, setBankerFilter] = useState(FILTER_ALL);
+  const bankerOptions = useMemo(() => deriveBankerFilterOptions(cases), [cases]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -104,7 +100,7 @@ export function LoanCasesExplorer({ cases }: { cases: LoanCase[] }) {
               aria-label="Filter by assigned banker"
             >
               <option value={FILTER_ALL}>All bankers</option>
-              {bankers.map((banker) => (
+              {bankerOptions.map((banker) => (
                 <option key={banker} value={banker}>
                   {banker}
                 </option>

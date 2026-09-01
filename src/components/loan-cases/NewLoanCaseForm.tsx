@@ -19,9 +19,19 @@ function FieldError({ message }: { message?: string }) {
 export function NewLoanCaseForm({
   customers,
   bankers,
+  assignedBankerLocked,
 }: {
   customers: CustomerOption[];
   bankers: BankerOption[];
+  /**
+   * True for the Banker role: `bankers` contains at most that Banker's own
+   * record (see decideBankerOptionsForRole), so the dropdown is replaced
+   * with a read-only display + hidden input instead of a `<select>` that
+   * could imply other Bankers are choosable. The server still ignores this
+   * value and re-resolves the Banker's own id itself — this is a UI
+   * affordance, not the enforcement (see createLoanCase).
+   */
+  assignedBankerLocked: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(createLoanCase, initialState);
   const [customerMode, setCustomerMode] = useState<"existing" | "new">(customers.length > 0 ? "existing" : "new");
@@ -165,14 +175,23 @@ export function NewLoanCaseForm({
 
         <div className="mt-4">
           <label className="mb-1.5 block text-sm font-medium text-slate-700">Assigned Banker</label>
-          <Select name="bankerId" defaultValue="" className="w-full sm:w-96">
-            <option value="">Unassigned</option>
-            {bankers.map((banker) => (
-              <option key={banker.id} value={banker.id}>
-                {banker.fullName} — {banker.bankName}
-              </option>
-            ))}
-          </Select>
+          {assignedBankerLocked ? (
+            <>
+              <input type="hidden" name="bankerId" value={bankers[0]?.id ?? ""} />
+              <p className="flex h-9 w-full items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 sm:w-96">
+                {bankers[0] ? `${bankers[0].fullName} — ${bankers[0].bankName}` : "Unassigned (no linked banker record)"}
+              </p>
+            </>
+          ) : (
+            <Select name="bankerId" defaultValue="" className="w-full sm:w-96">
+              <option value="">Unassigned</option>
+              {bankers.map((banker) => (
+                <option key={banker.id} value={banker.id}>
+                  {banker.fullName} — {banker.bankName}
+                </option>
+              ))}
+            </Select>
+          )}
           <FieldError message={errors.bankerId} />
         </div>
       </section>
