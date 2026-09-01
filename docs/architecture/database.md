@@ -198,6 +198,36 @@ document_status: pending | verified | rejected
   ever invoked, so a Banker's tampered request is already corrected before
   it reaches the database — this RPC-level fix is what prevents the same
   gap being exploited by calling the RPC directly, bypassing the app.
+  **Revision 2, same migration file — fail closed for an unlinked Banker**:
+  a `role = 'banker'` caller with no matching `public.bankers` row now
+  raises an exception instead of proceeding with a `null` `banker_id`.
+  Checked against a live export of `loan_cases_select_scope`
+  (`banker_id IN` their own `bankers.id` OR `assigned_agent_id = them` OR
+  `customer_id IN` their own customers) — none of those branches can ever
+  be satisfied by a `banker_id`-null case for that same Banker, so the
+  case would have silently become invisible to its own creator (visible
+  only to `super_admin`) with the RPC still reporting success. Mirrored at
+  the app layer by `shouldRejectUnlinkedBanker()` in
+  `src/lib/loan-cases/should-reject-unlinked-banker.ts`.
+- **`bankers_select_scope` / `customers_select_scope`** (RLS policies,
+  `supabase/migrations/20260901020000_restrict_banker_customer_bankers_select.sql`):
+  replace `bankers_select_authenticated` (previously: any authenticated
+  user could read every row of `public.bankers`) and
+  `customers_select_staff_or_self` (previously: every staff role, including
+  Banker, could read every row of `public.customers`) — both confirmed via
+  a live read-only Production RLS export, not guessed. A Banker can now
+  only read their own `bankers` row, or a `bankers` row attached to a
+  `loan_cases` row they can otherwise see as that case's `assigned_agent_id`
+  or its `customer_id`'s own linked user; and only `customers` rows
+  reachable through a `loan_cases` row where `banker_id` is their own.
+  Super Admin, Property Agent, and Mortgage Outsource Agent access is
+  otherwise unchanged — Property Agent/Mortgage Outsource Agent were
+  deliberately **not** narrowed (their own intended scope for this data
+  wasn't established this session; flagged rather than guessed at). Closes
+  the read-exposure half of the same authorization gap `create_loan_case`'s
+  fix closes on the write side — that RPC fix alone only narrows what the
+  Next.js app *asks for*, not what a Banker's own session could read
+  directly via the Supabase REST API.
 - `create_eligibility_verdict(p_loan_case_id uuid, p_bank_product_id uuid,
   p_verdict text, p_reasons jsonb, p_derivation_result_ids uuid[]) returns
   eligibility_verdicts` — `SECURITY INVOKER`. Sprint 6.3C. Atomically inserts

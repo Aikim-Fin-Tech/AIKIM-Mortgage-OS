@@ -31,20 +31,37 @@
 -- keeps the exact prior behavior — p_banker_id is used as submitted, so
 -- Super Admin's cross-Banker assignment ability is fully preserved.
 --
+-- Revision 2 (fail closed for an unlinked Banker): a 'banker'-role caller
+-- with no matching public.bankers row now aborts the whole function with a
+-- raised exception, instead of resolving to a null banker_id and creating
+-- an "Unassigned" case. Checked against the live loan_cases_select_scope
+-- policy (production-rls-policies.csv): a Banker only ever sees a case via
+-- `banker_id IN (their own bankers.id)`, `assigned_agent_id = them`, or
+-- `customer_id IN (their own customers)` — none of which a banker_id-null
+-- case created by an unlinked Banker can ever satisfy for that same
+-- Banker. Letting the insert proceed would silently create a case that
+-- vanishes from its own creator's view (visible only to super_admin) with
+-- no error at all. Mirrored at the app layer by
+-- shouldRejectUnlinkedBanker() in
+-- src/lib/loan-cases/should-reject-unlinked-banker.ts, called from
+-- src/app/(app)/loan-cases/new/actions.ts before this RPC is ever invoked.
+--
 -- Everything else about this function — SECURITY INVOKER (still runs under
 -- the caller's own RLS-governed session, never bypasses or weakens RLS),
 -- the existing-customer/new-customer transaction/rollback behavior, the
 -- return shape, the grants — is unchanged from
 -- supabase/migrations/20260716020000_create_loan_case_rpc.sql. This
 -- migration only replaces the function body (CREATE OR REPLACE, same
--- signature, so no DROP/grant changes are needed) and does not touch
+-- signature, so no DROP/grant changes are needed) and does not itself touch
 -- public.bankers/public.customers/public.loan_cases row-level security
--- policies themselves — loan_cases_insert_staff, customers_insert_staff,
--- and the bankers/customers SELECT policies are not committed to this repo
--- (see docs/DATABASE.md's "Not committed to this repo" note) and were not
--- possible to inspect from here; this fix intentionally scopes itself to
--- the one RPC this app actually uses for case creation, rather than
--- guessing at and rewriting policies whose current definition is unknown.
+-- policies — loan_cases_insert_staff's own with_check is purely role-based
+-- (confirmed against production-rls-policies.csv: it never references
+-- banker_id at all), which is exactly why this RPC-level check is the only
+-- layer that can close the gap; RLS structurally cannot. The separate
+-- read-exposure gap in the live bankers_select_authenticated and
+-- customers_select_staff_or_self policies (also confirmed against that
+-- same CSV export) is addressed by the companion migration
+-- 20260901020000_restrict_banker_customer_bankers_select.sql, not this one.
 --
 -- Idempotent: CREATE OR REPLACE, safe to run more than once. Touches no
 -- existing table rows. Copy this entire file into the Supabase SQL Editor
@@ -91,12 +108,16 @@ begin
   -- client submitted (see decideEffectiveBankerId in
   -- src/lib/loan-cases/decide-effective-banker-id.ts for the identical
   -- app-layer decision). Every other role's submitted value passes through
-  -- unchanged. A Banker with no linked bankers row resolves to null
-  -- (unassigned), same as if they had left the field blank.
+  -- unchanged. A Banker with no linked bankers row is rejected outright
+  -- (Revision 2, below) rather than resolving to a null/unassigned case.
   if v_actor_role = 'banker' then
     select id into v_actor_banker_id
     from public.bankers
     where user_profile_id = v_actor_profile_id;
+
+    if v_actor_banker_id is null then
+      raise exception 'Your account is not linked to a Banker record. Contact an administrator.';
+    end if;
 
     v_effective_banker_id := v_actor_banker_id;
   else

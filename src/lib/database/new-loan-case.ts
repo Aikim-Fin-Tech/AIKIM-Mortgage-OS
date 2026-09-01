@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getCurrentBanker } from "@/lib/auth/current-banker";
 import { decideBankerOptionsForRole } from "@/lib/loan-cases/decide-banker-options";
+import { dedupeCustomersFromCaseRows } from "@/lib/loan-cases/dedupe-customers-from-case-rows";
 import type { CustomerOption, BankerOption, NewLoanCaseFormOptions } from "@/lib/loan-cases/new-loan-case-types";
 
 /**
@@ -72,15 +73,7 @@ export async function getNewLoanCaseFormOptions(): Promise<NewLoanCaseFormOption
         return { customers: [], bankers, error: "Failed to load: customers" };
       }
 
-      const seen = new Set<string>();
-      const customers: CustomerOption[] = [];
-      for (const row of data ?? []) {
-        if (row.customers && !seen.has(row.customers.id)) {
-          seen.add(row.customers.id);
-          customers.push({ id: row.customers.id, fullName: row.customers.full_name, phone: row.customers.phone });
-        }
-      }
-      customers.sort((a, b) => a.fullName.localeCompare(b.fullName));
+      const customers = dedupeCustomersFromCaseRows(data ?? []);
 
       return { customers, bankers, error: null };
     }

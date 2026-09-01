@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth/current-user";
 import { getCurrentBanker } from "@/lib/auth/current-banker";
 import { STAFF_ROLES } from "@/lib/auth/staff-roles";
 import { decideEffectiveBankerId } from "@/lib/loan-cases/decide-effective-banker-id";
+import { shouldRejectUnlinkedBanker } from "@/lib/loan-cases/should-reject-unlinked-banker";
 
 // Raw enum values that actually exist in public.loan_stage / public.loan_status
 // (see Sprint 4 schema) — not guessed.
@@ -130,6 +131,20 @@ export async function createLoanCase(
   // the RPC directly. See decide-effective-banker-id.ts and
   // supabase/migrations/20260901010000_enforce_banker_self_assignment.sql.
   const ownBanker = currentUser.role === "banker" ? await getCurrentBanker() : null;
+
+  // Fail closed rather than silently creating an "Unassigned" case: against
+  // the live loan_cases_select_scope policy, a Banker with no linked
+  // bankers row can never see a banker_id-null case (it doesn't match any
+  // of that policy's OR branches for them), so proceeding here would create
+  // a case that immediately vanishes from its own creator's view with no
+  // explanation. See should-reject-unlinked-banker.ts.
+  if (shouldRejectUnlinkedBanker(currentUser.role, ownBanker?.id ?? null)) {
+    return {
+      fieldErrors: {},
+      formError: "Your account is not linked to a Banker record. Contact an administrator.",
+    };
+  }
+
   const effectiveBankerId = decideEffectiveBankerId(currentUser.role, ownBanker?.id ?? null, values.bankerId || null);
 
   const supabase = await createClient();
