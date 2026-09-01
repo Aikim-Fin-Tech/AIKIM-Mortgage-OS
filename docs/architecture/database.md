@@ -215,19 +215,23 @@ document_status: pending | verified | rejected
   user could read every row of `public.bankers`) and
   `customers_select_staff_or_self` (previously: every staff role, including
   Banker, could read every row of `public.customers`) — both confirmed via
-  a live read-only Production RLS export, not guessed. A Banker can now
-  only read their own `bankers` row, or a `bankers` row attached to a
-  `loan_cases` row they can otherwise see as that case's `assigned_agent_id`
-  or its `customer_id`'s own linked user; and only `customers` rows
-  reachable through a `loan_cases` row where `banker_id` is their own.
-  Super Admin, Property Agent, and Mortgage Outsource Agent access is
-  otherwise unchanged — Property Agent/Mortgage Outsource Agent were
-  deliberately **not** narrowed (their own intended scope for this data
-  wasn't established this session; flagged rather than guessed at). Closes
-  the read-exposure half of the same authorization gap `create_loan_case`'s
-  fix closes on the write side — that RPC fix alone only narrows what the
-  Next.js app *asks for*, not what a Banker's own session could read
-  directly via the Supabase REST API.
+  a live read-only Production RLS export, not guessed. Each new policy is a
+  `case current_user_role() when 'banker' then <narrow condition> else
+  <original qual, verbatim> end`: a Banker can now only read their own
+  `bankers` row (`user_profile_id = current_user_profile_id()`) and only
+  `customers` rows reachable through a `loan_cases` row where `banker_id`
+  is their own — every other role or account (Super Admin, Property Agent,
+  Mortgage Outsource Agent, a customer's own self-access, or any other
+  authenticated session) falls through to the exact original qual
+  expression, unchanged, not re-derived or inferred. An earlier draft of
+  this migration added an `assigned_agent_id`/`customer_id`-based branch to
+  `bankers_select_scope` as a guess at what Property Agent/Mortgage
+  Outsource Agent need to keep seeing an assigned Banker's name — that
+  guess was removed; their access to both tables is byte-identical to
+  today. Closes the read-exposure half of the same authorization gap
+  `create_loan_case`'s fix closes on the write side — that RPC fix alone
+  only narrows what the Next.js app *asks for*, not what a Banker's own
+  session could read directly via the Supabase REST API.
 - `create_eligibility_verdict(p_loan_case_id uuid, p_bank_product_id uuid,
   p_verdict text, p_reasons jsonb, p_derivation_result_ids uuid[]) returns
   eligibility_verdicts` — `SECURITY INVOKER`. Sprint 6.3C. Atomically inserts

@@ -24,45 +24,44 @@
 -- entirely. This migration closes that at the only layer that actually
 -- enforces it: RLS itself.
 --
+-- Design principle for this revision: narrow Banker, and Banker only, to
+-- an exact ownership/case-scoped condition — every non-Banker role or
+-- account (including one where current_user_role() somehow resolves to
+-- null) falls through to the *exact original* qual expression, verbatim,
+-- so nothing is broadened and nothing is inferred for Property Agent or
+-- Mortgage Outsource Agent. An earlier draft of this migration added an
+-- `assigned_agent_id`/`customer_id`-based branch to bankers_select_scope
+-- as a guess at what those two roles need merely to keep seeing an
+-- assigned Banker's name on a case — that guess is removed here entirely;
+-- their SELECT behavior on both tables is untouched, not re-derived.
+--
 -- What changes:
 --   - bankers_select_authenticated is dropped and replaced by
---     bankers_select_scope: super_admin keeps full access; every other
---     authenticated user can read only their own linked bankers row
---     (user_profile_id = current_user_profile_id()) OR the bankers row
---     attached to a loan_cases row they can otherwise legitimately see as
---     that case's assigned_agent or as the case's own customer — the
---     minimum needed to keep rendering an "Assigned Banker" name on any
---     case a non-Banker staff member or customer is already allowed to
---     view (e.g. the Loan Cases list's `bankers ( full_name )` embed in
---     src/lib/database/loan-cases.ts).
+--     bankers_select_scope: when current_user_role() = 'banker', the qual
+--     collapses to user_profile_id = current_user_profile_id() (their own
+--     row only). For every other role/account, the qual is exactly
+--     auth.role() = 'authenticated' — byte-identical to the policy being
+--     replaced, so Super Admin, Property Agent, Mortgage Outsource Agent,
+--     Customer, and any other authenticated account keep the exact same
+--     access as today.
 --   - customers_select_staff_or_self is dropped and replaced by
---     customers_select_scope: super_admin, property_agent, and
---     mortgage_outsource_agent keep the EXACT prior unrestricted access
---     (deliberately not narrowed — see the note below on why). Banker is
---     removed from that blanket branch and instead gets a new, narrow
---     branch: only customers reachable through a loan_cases row where
---     banker_id is that Banker's own bankers.id. The customer's own
---     self-access branch (user_profile_id = current_user_profile_id()) is
---     preserved unchanged for the `customer` role.
+--     customers_select_scope: when current_user_role() = 'banker', the
+--     qual collapses to an EXISTS against loan_cases where customer_id
+--     matches and banker_id is that Banker's own bankers.id — i.e. only
+--     customers linked to a Loan Case assigned to that Banker. For every
+--     other role/account, the qual is exactly
+--     current_user_role() = ANY (super_admin, property_agent,
+--     mortgage_outsource_agent) OR user_profile_id = current_user_profile_id()
+--     — the original policy's expression with only 'banker' removed from
+--     the role array, since Banker now has its own branch above. Super
+--     Admin, Property Agent, Mortgage Outsource Agent, and a customer's
+--     own self-access are all preserved exactly.
 --
--- Explicitly NOT changed, and flagged rather than guessed at: whether
--- property_agent's and mortgage_outsource_agent's own customer/banker
--- visibility should itself eventually be narrowed to their own
--- assigned_agent_id scope (matching the same principle applied to Banker
--- here) is a real open question this migration does not answer — their
--- current blanket "any staff role" access is left completely untouched.
--- The `assigned_agent_id = current_user_profile_id()` branch inside the new
--- bankers_select_scope policy is this migration's own inference (from
--- loan_cases_select_scope's existing shape) about what a property_agent or
--- mortgage_outsource_agent needs merely to keep seeing an assigned Banker's
--- *name* on a case they're already permitted to view — it has not been
--- exercised against a live property_agent/mortgage_outsource_agent account
--- this session. Recommend a live QA pass with such an account, in staging,
--- before running this against Production.
---
--- customers_insert_staff and customers_update_staff_or_self, and every
--- bankers policy other than the SELECT one, are entirely untouched by this
--- migration — only the two SELECT policies named above are replaced.
+-- customers_insert_staff, customers_update_staff_or_self, customers_delete_admin,
+-- and every bankers policy other than the SELECT one (bankers_insert_admin,
+-- bankers_update_admin, bankers_update_self, bankers_delete_admin) are
+-- entirely untouched by this migration — only the two SELECT policies
+-- named above are replaced.
 --
 -- Idempotent: every statement is `drop policy if exists` followed by
 -- `create policy`, safe to run more than once. Touches no existing table
@@ -80,19 +79,10 @@ drop policy if exists "bankers_select_scope" on public.bankers;
 create policy "bankers_select_scope" on public.bankers
 for select
 using (
-  current_user_role() = 'super_admin'::user_role
-  or user_profile_id = current_user_profile_id()
-  or exists (
-    select 1
-    from public.loan_cases lc
-    where lc.banker_id = bankers.id
-      and (
-        lc.assigned_agent_id = current_user_profile_id()
-        or lc.customer_id in (
-          select c.id from public.customers c where c.user_profile_id = current_user_profile_id()
-        )
-      )
-  )
+  case current_user_role()
+    when 'banker'::user_role then user_profile_id = current_user_profile_id()
+    else auth.role() = 'authenticated'::text
+  end
 );
 
 -- ----------------------------------------------------------------------------
@@ -104,21 +94,20 @@ drop policy if exists "customers_select_scope" on public.customers;
 create policy "customers_select_scope" on public.customers
 for select
 using (
-  -- Property Agent and Mortgage Outsource Agent: unchanged, unrestricted —
-  -- deliberately not narrowed (see header note above).
-  current_user_role() = ANY (ARRAY['super_admin'::user_role, 'property_agent'::user_role, 'mortgage_outsource_agent'::user_role])
-  -- A customer viewing their own record — unchanged from the prior policy.
-  or user_profile_id = current_user_profile_id()
-  -- Banker: narrowed from "every customer" to only customers reachable
-  -- through a loan_cases row this Banker is the assigned banker_id for.
-  or exists (
-    select 1
-    from public.loan_cases lc
-    where lc.customer_id = customers.id
-      and lc.banker_id in (
-        select b.id from public.bankers b where b.user_profile_id = current_user_profile_id()
-      )
-  )
+  case current_user_role()
+    when 'banker'::user_role then exists (
+      select 1
+      from public.loan_cases lc
+      where lc.customer_id = customers.id
+        and lc.banker_id in (
+          select b.id from public.bankers b where b.user_profile_id = current_user_profile_id()
+        )
+    )
+    else (
+      current_user_role() = ANY (ARRAY['super_admin'::user_role, 'property_agent'::user_role, 'mortgage_outsource_agent'::user_role])
+      or user_profile_id = current_user_profile_id()
+    )
+  end
 );
 
 notify pgrst, 'reload schema';
