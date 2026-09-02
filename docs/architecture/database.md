@@ -232,6 +232,27 @@ document_status: pending | verified | rejected
   `create_loan_case`'s fix closes on the write side — that RPC fix alone
   only narrows what the Next.js app *asks for*, not what a Banker's own
   session could read directly via the Supabase REST API.
+  **Incident and partial rollback (`20260901030000_rollback_customers_select_scope_recursion.sql`)**:
+  `customers_select_scope`'s Banker branch queries `public.loan_cases` —
+  but `loan_cases_select_scope` (pre-existing, untouched) already queries
+  `public.customers` in its own Banker branch. Together these created
+  mutual RLS recursion: reading `loan_cases` required expanding
+  `customers`' policy, which required expanding `loan_cases`' policy
+  again, without end. Postgres rejected this at query-plan time, breaking
+  real data loading on the Dashboard, `/loan-cases`, and `/loan-cases/new`
+  immediately after merge (confirmed live). `customers_select_scope` is
+  dropped and `customers_select_staff_or_self` is restored with its exact
+  pre-PR-#4 qual (captured from `production-rls-policies.csv`) — a full
+  revert of the `customers` SELECT narrowing, including `'banker'` back in
+  the role array. `bankers_select_scope` is **not** part of this rollback —
+  it has no reference to `loan_cases` or `customers` and was never
+  implicated in the recursion; a Banker still only reads their own
+  `bankers` row. `create_loan_case`'s forced self-assignment and
+  unlinked-Banker fail-closed behavior are also unaffected. Properly
+  closing the `customers` read-exposure gap without recursion (e.g. via a
+  `SECURITY DEFINER` helper function that computes a Banker's authorized
+  customer ids without re-triggering `loan_cases`' RLS) is deferred to a
+  future, separately-reviewed migration.
 - `create_eligibility_verdict(p_loan_case_id uuid, p_bank_product_id uuid,
   p_verdict text, p_reasons jsonb, p_derivation_result_ids uuid[]) returns
   eligibility_verdicts` — `SECURITY INVOKER`. Sprint 6.3C. Atomically inserts
