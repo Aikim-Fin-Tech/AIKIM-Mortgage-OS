@@ -254,7 +254,8 @@ document_status: pending | verified | rejected
   customer ids without re-triggering `loan_cases`' RLS) is deferred to a
   future, separately-reviewed migration.
 - **`is_customer_authorized_for_current_banker(p_customer_id uuid) returns boolean`**
-  (`supabase/migrations/20260902010000_permanent_nonrecursive_customers_select.sql`)
+  (`supabase/migrations/20260902010000_permanent_nonrecursive_customers_select.sql`
+  — **authored only, not executed against Production**)
   — `SECURITY DEFINER`, owned by `postgres`, `STABLE`, `SET search_path = ''`
   with every reference fully schema-qualified (a stricter posture than this
   repo's usual `search_path = 'public'` convention, deliberately adopted
@@ -282,8 +283,12 @@ document_status: pending | verified | rejected
   self-access) is copied byte-for-byte from the just-restored
   `customers_select_staff_or_self`, unchanged. `bankers_select_scope`,
   every `loan_cases` policy, and `create_loan_case`'s forced self-assignment
-  and unlinked-Banker fail-closed behavior are untouched. Rollback:
-  `scripts/rollback-permanent-customers-select-scope.sql`.
+  and unlinked-Banker fail-closed behavior are untouched. Complete rollback
+  (drops `customers_select_scope`, restores `customers_select_staff_or_self`
+  exactly, revokes every grant on the helper, then drops the helper
+  itself — restoring the exact pre-migration state):
+  `scripts/rollback-permanent-customers-select-scope.sql`, verified by
+  `scripts/verify-rollback-permanent-customers-select-scope.sql`.
 - `create_eligibility_verdict(p_loan_case_id uuid, p_bank_product_id uuid,
   p_verdict text, p_reasons jsonb, p_derivation_result_ids uuid[]) returns
   eligibility_verdicts` — `SECURITY INVOKER`. Sprint 6.3C. Atomically inserts

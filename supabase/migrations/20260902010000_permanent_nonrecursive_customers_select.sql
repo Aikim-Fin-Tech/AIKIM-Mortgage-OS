@@ -1,6 +1,11 @@
 -- ============================================================================
 -- AIKIM Mortgage OS — permanent, non-recursive customers SELECT RLS
 --
+-- STATUS: authored only — NOT executed. This file has not been run against
+-- Production. No agent executes migrations; a human must copy this file
+-- into the Supabase SQL Editor and run it manually, then run
+-- scripts/verify-permanent-customers-select-scope.sql to confirm.
+--
 -- Context: 20260901020000_restrict_banker_customer_bankers_select.sql's
 -- customers_select_scope queried public.loan_cases directly in its Banker
 -- branch, which created mutual RLS recursion with loan_cases_select_scope
