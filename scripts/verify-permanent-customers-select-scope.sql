@@ -21,6 +21,28 @@ from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker';
 
+-- Explicit pass/fail assertions on the same four hardening properties,
+-- rather than relying on the raw columns above being eyeballed correctly.
+select 'helper function owner is explicitly postgres' as check_name,
+       (select pg_get_userbyid(p.proowner) = 'postgres'
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker') as passed
+union all
+select 'helper function is SECURITY DEFINER (prosecdef = true)',
+       (select p.prosecdef
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker')
+union all
+select 'helper function volatility is STABLE',
+       (select p.provolatile = 's'
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker')
+union all
+select 'helper function search_path is exactly empty',
+       (select 'search_path=' = ANY(p.proconfig)
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker');
+
 select
   coalesce(r.rolname, 'PUBLIC') as grantee,
   a.privilege_type

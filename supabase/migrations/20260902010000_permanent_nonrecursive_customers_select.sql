@@ -38,10 +38,12 @@
 -- Design: a single-purpose, per-row boolean helper —
 -- public.is_customer_authorized_for_current_banker(p_customer_id uuid) —
 -- replaces the direct EXISTS-against-loan_cases that caused the recursion.
--- Because the function is SECURITY DEFINER and owned by postgres, its
--- internal SELECT against public.loan_cases/public.bankers runs bypassing
--- RLS, so evaluating it from within customers_select_scope never
--- re-triggers loan_cases_select_scope. It takes exactly one argument — the
+-- Because the function is SECURITY DEFINER and explicitly owned by
+-- postgres (via ALTER FUNCTION ... OWNER TO postgres, not left to the
+-- implicit identity of whoever executes this migration), its internal
+-- SELECT against public.loan_cases/public.bankers runs bypassing RLS, so
+-- evaluating it from within customers_select_scope never re-triggers
+-- loan_cases_select_scope. It takes exactly one argument — the
 -- row being tested, never a caller-supplied identity — and resolves the
 -- caller's own identity exclusively via public.current_user_profile_id(),
 -- which itself resolves from auth.uid(). It returns a single boolean,
@@ -57,7 +59,8 @@
 -- identifiers.
 --
 -- What changes:
---   - Creates public.is_customer_authorized_for_current_banker(uuid).
+--   - Creates public.is_customer_authorized_for_current_banker(uuid) and
+--     explicitly assigns its ownership to postgres.
 --   - Drops customers_select_staff_or_self (the temporarily-restored,
 --     full-access policy) and creates customers_select_scope: the Banker
 --     branch calls the new helper; every other branch (super_admin,
@@ -106,6 +109,15 @@ as $$
       and b.user_profile_id = public.current_user_profile_id()
   );
 $$;
+
+-- Ownership is asserted explicitly rather than relying on the implicit
+-- identity of whoever runs this migration — the SECURITY DEFINER bypass
+-- this whole design depends on is a property of the function's owner, not
+-- of who happens to execute CREATE FUNCTION, so that owner must be pinned
+-- in the DDL itself. Placed before the REVOKE/GRANT statements and before
+-- the policy that calls this function, so nothing downstream can ever
+-- observe or depend on an unpinned owner.
+alter function public.is_customer_authorized_for_current_banker(uuid) owner to postgres;
 
 revoke all on function public.is_customer_authorized_for_current_banker(uuid) from public;
 revoke all on function public.is_customer_authorized_for_current_banker(uuid) from anon;

@@ -256,9 +256,11 @@ document_status: pending | verified | rejected
 - **`is_customer_authorized_for_current_banker(p_customer_id uuid) returns boolean`**
   (`supabase/migrations/20260902010000_permanent_nonrecursive_customers_select.sql`
   — **authored only, not executed against Production**)
-  — `SECURITY DEFINER`, owned by `postgres`, `STABLE`, `SET search_path = ''`
-  with every reference fully schema-qualified (a stricter posture than this
-  repo's usual `search_path = 'public'` convention, deliberately adopted
+  — `SECURITY DEFINER`, explicitly `ALTER FUNCTION ... OWNER TO postgres`
+  (not left to the implicit identity of whoever runs the migration),
+  `STABLE`, `SET search_path = ''` with every reference fully
+  schema-qualified (a stricter posture than this repo's usual
+  `search_path = 'public'` convention, deliberately adopted
   since nothing depends on this function resolving unqualified
   identifiers). This is the permanent, non-recursive replacement for the
   rolled-back `customers_select_scope` above, verified safe against a live
