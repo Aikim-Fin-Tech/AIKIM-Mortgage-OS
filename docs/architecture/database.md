@@ -253,6 +253,37 @@ document_status: pending | verified | rejected
   `SECURITY DEFINER` helper function that computes a Banker's authorized
   customer ids without re-triggering `loan_cases`' RLS) is deferred to a
   future, separately-reviewed migration.
+- **`is_customer_authorized_for_current_banker(p_customer_id uuid) returns boolean`**
+  (`supabase/migrations/20260902010000_permanent_nonrecursive_customers_select.sql`)
+  — `SECURITY DEFINER`, owned by `postgres`, `STABLE`, `SET search_path = ''`
+  with every reference fully schema-qualified (a stricter posture than this
+  repo's usual `search_path = 'public'` convention, deliberately adopted
+  since nothing depends on this function resolving unqualified
+  identifiers). This is the permanent, non-recursive replacement for the
+  rolled-back `customers_select_scope` above, verified safe against a live
+  read-only Production introspection before being authored: `postgres` (the
+  owner of anything created via the Supabase SQL Editor) has
+  `rolbypassrls = true`, and none of `bankers`/`customers`/`loan_cases` have
+  `FORCE ROW LEVEL SECURITY` set — so this function's internal query
+  against `loan_cases`/`bankers` bypasses RLS entirely and never
+  re-triggers `loan_cases_select_scope`, closing the recursion permanently.
+  Takes exactly one argument — the customer row being tested, never a
+  caller-supplied identity — and resolves the caller's own identity
+  exclusively via `current_user_profile_id()` (itself confirmed
+  recursion-free: `SECURITY DEFINER`, owned by `postgres`, touches only
+  `user_profiles`). Returns a single boolean, never a list of ids or any
+  customer/Banker detail. `EXECUTE` is revoked from `PUBLIC` and `anon`,
+  granted only to `authenticated` — confirmed that `authenticated`/`anon`/
+  `PUBLIC` hold no `CREATE` on schema `public` at all, so none of them can
+  create a colliding object or (lacking ownership) replace/shadow this
+  function. `customers_select_scope` is recreated with the Banker branch
+  calling this helper for `customers.id`; every other branch (Super Admin,
+  Property Agent, Mortgage Outsource Agent, and a customer's own
+  self-access) is copied byte-for-byte from the just-restored
+  `customers_select_staff_or_self`, unchanged. `bankers_select_scope`,
+  every `loan_cases` policy, and `create_loan_case`'s forced self-assignment
+  and unlinked-Banker fail-closed behavior are untouched. Rollback:
+  `scripts/rollback-permanent-customers-select-scope.sql`.
 - `create_eligibility_verdict(p_loan_case_id uuid, p_bank_product_id uuid,
   p_verdict text, p_reasons jsonb, p_derivation_result_ids uuid[]) returns
   eligibility_verdicts` — `SECURITY INVOKER`. Sprint 6.3C. Atomically inserts
