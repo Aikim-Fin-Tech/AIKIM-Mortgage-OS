@@ -39,9 +39,21 @@ select 'helper function volatility is STABLE',
         where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker')
 union all
 select 'helper function search_path is exactly empty',
-       (select 'search_path=' = ANY(p.proconfig)
-        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker');
+       -- Postgres stores an explicitly-empty `SET search_path = ''` as the
+       -- quoted-empty-string form `search_path=""` inside proconfig, not
+       -- the bare `search_path=` this check originally compared against
+       -- (confirmed by a live Production run: proconfig_settings showed
+       -- {search_path=""}, producing a false negative against the wrong
+       -- literal). pg_options_to_table() decodes proconfig's internal
+       -- quoting properly instead of raw string-matching an assumed
+       -- literal, so this check is robust regardless of how Postgres
+       -- happens to serialize an empty value.
+       (select t.setting = ''
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        cross join lateral pg_options_to_table(p.proconfig) t
+        where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker'
+          and t.option_name = 'search_path');
 
 select
   coalesce(r.rolname, 'PUBLIC') as grantee,
@@ -53,9 +65,59 @@ left join pg_roles r on r.oid = a.grantee
 where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker'
 order by grantee, privilege_type;
 
+-- Corrected security assertions (previously a single, mis-specified
+-- "only authenticated has EXECUTE" check, which produced a false positive
+-- against live Production evidence: grants also legitimately included
+-- postgres and service_role). The function owner (postgres) always
+-- implicitly retains full privileges on its own object regardless of any
+-- REVOKE FROM PUBLIC/anon — standard Postgres semantics, not a leak.
+-- service_role — Supabase's fully-trusted backend role, which already
+-- bypasses RLS by platform design and is never exposed to a client (see
+-- CLAUDE.md: "service_role key never appears in application code") —
+-- receives EXECUTE on new public-schema functions via Supabase's own
+-- default-privilege bootstrapping, exactly like the pre-existing sibling
+-- functions current_user_role()/current_user_profile_id() already do.
+-- Neither is a security concern the migration needs to (or should)
+-- change. The actual, intended boundary is that PUBLIC and anon — the
+-- only grantees that could let an untrusted or client-facing caller
+-- invoke this function outside of RLS policy evaluation — have no
+-- access, which these checks assert directly.
+select 'authenticated has EXECUTE on the helper' as check_name,
+       exists (
+         select 1 from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+         left join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a on true
+         left join pg_roles r on r.oid = a.grantee
+         where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker'
+           and a.privilege_type = 'EXECUTE' and r.rolname = 'authenticated'
+       ) as passed
+union all
+select 'PUBLIC and anon do not have EXECUTE on the helper',
+       not exists (
+         select 1 from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+         left join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a on true
+         left join pg_roles r on r.oid = a.grantee
+         where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker'
+           and a.privilege_type = 'EXECUTE' and coalesce(r.rolname, 'PUBLIC') in ('PUBLIC', 'anon')
+       )
+union all
+select 'every EXECUTE grantee is a known, trusted principal (owner postgres, service_role, or authenticated)',
+       not exists (
+         select 1 from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+         left join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a on true
+         left join pg_roles r on r.oid = a.grantee
+         where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker'
+           and a.privilege_type = 'EXECUTE'
+           and coalesce(r.rolname, 'PUBLIC') not in ('postgres', 'service_role', 'authenticated')
+       );
+
 -- Expect: owner postgres; is_security_definer true; volatility STABLE;
--- proconfig contains search_path= (empty); grants: authenticated/EXECUTE
--- only — no PUBLIC, no anon row.
+-- search_path exactly empty; EXECUTE granted to postgres (owner, always
+-- implicit), service_role (Supabase default backend grant), and
+-- authenticated (the intended application caller) — and to no one else,
+-- specifically never PUBLIC or anon.
 
 -- ----------------------------------------------------------------------------
 -- Section B: old/new customers policy presence and exact branches
