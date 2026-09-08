@@ -48,12 +48,26 @@ select 'helper function search_path is exactly empty',
        -- quoting properly instead of raw string-matching an assumed
        -- literal, so this check is robust regardless of how Postgres
        -- happens to serialize an empty value.
-       (select t.setting = ''
-        from pg_proc p
-        join pg_namespace n on n.oid = p.pronamespace
-        cross join lateral pg_options_to_table(p.proconfig) t
-        where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker'
-          and t.option_name = 'search_path');
+       --
+       -- pg_options_to_table(text[]) returns columns (option_name,
+       -- option_value) — NOT (option_name, setting). A prior revision of
+       -- this check referenced the nonexistent t.setting (confusing it
+       -- with the unrelated pg_settings.setting column) and errored with
+       -- "column t.setting does not exist" against live Production. Fixed
+       -- to use the function's actual output column, option_value, and
+       -- wrapped in coalesce(..., false) so a missing search_path entry
+       -- (which should never happen once the function exists, but would
+       -- otherwise make the subquery return no row, i.e. NULL) reads as
+       -- an explicit failure rather than an ambiguous blank/null result.
+       coalesce(
+         (select t.option_value = ''
+          from pg_proc p
+          join pg_namespace n on n.oid = p.pronamespace
+          cross join lateral pg_options_to_table(p.proconfig) t
+          where n.nspname = 'public' and p.proname = 'is_customer_authorized_for_current_banker'
+            and t.option_name = 'search_path'),
+         false
+       );
 
 select
   coalesce(r.rolname, 'PUBLIC') as grantee,
