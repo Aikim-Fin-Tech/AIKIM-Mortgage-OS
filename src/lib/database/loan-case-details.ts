@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { STATUS_LABELS, type LoanStage, type LoanStatus } from "@/lib/loan-cases-data";
 import { DOCUMENT_STATUS_LABELS } from "@/lib/documents/document-status";
+import { maskIcNumber } from "@/lib/customers/mask-ic-number";
 
 /**
  * Read-only data access for the Loan Case Detail workspace.
@@ -111,22 +112,6 @@ export type LoanCaseDetails = {
 };
 
 const EMPTY_DOCUMENT_SUMMARY: DocumentSummary = { uploaded: 0, verified: 0, pending: 0, rejected: 0, recent: [] };
-
-function maskIcNumber(ic: string): string {
-  const visibleCount = 4;
-  const chars = ic.split("");
-  let visible = 0;
-  for (let i = chars.length - 1; i >= 0; i--) {
-    if (/[0-9a-zA-Z]/.test(chars[i])) {
-      if (visible < visibleCount) {
-        visible++;
-        continue;
-      }
-      chars[i] = "X";
-    }
-  }
-  return chars.join("");
-}
 
 function describeAuditRow(
   action: string,
