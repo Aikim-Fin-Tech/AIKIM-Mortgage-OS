@@ -16,7 +16,7 @@ import {
 const navItems = [
   { label: "Dashboard", href: "/", icon: DashboardIcon },
   { label: "Loan Cases", href: "/loan-cases", icon: CasesIcon },
-  { label: "Customers", href: "#", icon: CustomersIcon },
+  { label: "Customers", href: "/customers", icon: CustomersIcon },
   { label: "Documents", href: "#", icon: DocumentsIcon },
   { label: "Bankers", href: "#", icon: BankersIcon },
   { label: "AI Assistant", href: "#", icon: AIIcon },
