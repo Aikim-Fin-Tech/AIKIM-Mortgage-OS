@@ -1,0 +1,95 @@
+-- ============================================================================
+-- AIKIM Mortgage OS — remove public.customers.assigned_user_id
+--
+-- STATUS: authored only — NOT executed. This file has not been run against
+-- Production. No agent executes migrations; a human must copy this file
+-- into the Supabase SQL Editor and run it manually.
+--
+-- Context: this column was discovered, not authored — it does not appear in
+-- any migration this repo has ever committed, on any branch, at any point
+-- in its history. It is one of two identity-bridge columns on
+-- public.customers (the other, user_profile_id, is confirmed live — see
+-- below); it references public.users(id), an out-of-band, unlinked
+-- identity table (distinct from this repo's own auth.users ->
+-- public.user_profiles system) that is itself one of an 18-table cluster
+-- pre-existing production before this repo's own earliest migration.
+--
+-- A read-only, multi-session Production investigation (recorded in full in
+-- docs/decisions/0018-remove-customers-assigned-user-id.md, "Evidence"
+-- section) checked every layer capable of holding a live reference to this
+-- column, with zero hits at each:
+--   - Triggers: none reference it (the only trigger touching identity,
+--     on_auth_user_created -> handle_new_auth_user(), writes to
+--     public.user_profiles only, never public.users).
+--   - Functions/procedures: the 4 functions matching a text search for
+--     either bridge column name all resolve through user_profile_id, none
+--     through assigned_user_id.
+--   - Views/materialized views: zero views depend on public.customers at
+--     all.
+--   - RLS policies: all 8 policies across bankers/customers/documents/
+--     loan_cases that reference a bridge column reference user_profile_id;
+--     none reference assigned_user_id.
+--   - This repository's current file tree and its entire commit history
+--     (all branches): zero references, anywhere, ever.
+--   - Column population: 0 of 11 live customers rows have a value; the
+--     table itself has 0 lifetime UPDATEs ever (whole-row, not just this
+--     column).
+--   - Catalog-level dependency graph (pg_depend): the only dependent of
+--     this column is its own FK constraint (customers_assigned_user_id_fkey
+--     -> users(id)), and that constraint's only dependents are its own
+--     four Postgres-internal RI_ConstraintTrigger enforcement triggers
+--     (deptype 'i') — nothing independent anywhere.
+--   - Organizational confirmation: no system other than this codebase uses
+--     this Supabase project (no other app, script, workflow, or
+--     integration) — closing the one residual gap no read-only check can
+--     ever resolve on its own.
+--
+-- user_profile_id is explicitly NOT touched by this migration — it has
+-- confirmed live RLS/RPC references (see above) and remains in place,
+-- unpopulated or not.
+--
+-- What changes:
+--   - Drops public.customers.assigned_user_id. Because it is referenced by
+--     exactly one single-column foreign key
+--     (customers_assigned_user_id_fkey -> public.users(id)) and nothing
+--     else, Postgres drops that constraint automatically as part of
+--     DROP COLUMN — no CASCADE keyword is used or required. The
+--     constraint's four internal RI_ConstraintTrigger enforcement triggers
+--     (two on customers, two on users) are Postgres-managed parts of the
+--     constraint itself and are removed automatically with it.
+--
+-- Explicitly NOT touched by this migration:
+--   - public.users — the table assigned_user_id referenced. Remains
+--     untouched, unclassified for removal, out of scope here.
+--   - The other 17 tables in the same out-of-band cluster discovered during
+--     this investigation. None are touched, renamed, or judged by this
+--     migration.
+--   - public.customers.user_profile_id and every other column on
+--     public.customers.
+--   - supabase/migrations/20260726005000_bank_products_schema_reconciliation.sql
+--     — confirmed fully independent (contains no reference to customers or
+--     assigned_user_id beyond two unrelated migration filenames cited in a
+--     header comment) and deliberately kept as a separate, unrelated
+--     migration rather than folded into this one.
+--
+-- Idempotency: DROP COLUMN IF EXISTS is natively idempotent — re-running
+-- this file after it has already succeeded once is a harmless no-op.
+-- Transactional: wrapped in BEGIN/COMMIT, matching this repo's convention
+-- for every migration that changes a shared table.
+--
+-- NOT executed by this session — pending human review and manual execution
+-- in the Supabase SQL Editor. No agent executes migrations against
+-- Production.
+-- ============================================================================
+
+begin;
+
+alter table public.customers drop column if exists assigned_user_id;
+
+commit;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================================
+-- End of migration
+-- ============================================================================
