@@ -44,3 +44,77 @@ export function resolveIsMandatory(
   if (key === null) return null;
   return mandatoryByKey.get(key) ?? null;
 }
+
+/**
+ * Only salary_slip and bank_statement carry a document_period — every other
+ * ocr_kind (including epf_statement, which is deliberately required_count=1/
+ * required_months=null) is untouched by any of the monthly-coverage logic
+ * below.
+ */
+export function isPeriodBasedDocumentKind(kind: string | null): boolean {
+  return kind === "salary_slip" || kind === "bank_statement";
+}
+
+/**
+ * A period-based document type's required_months must be a positive
+ * integer to mean anything as "the last N complete months." Null (never
+ * configured), 0, a negative number, or a non-integer are all invalid —
+ * callers must treat this as a rule-configuration error, never silently
+ * fall back to counting raw uploaded files (see isPeriodBasedDocumentKind
+ * call sites in ./required-documents.ts).
+ */
+export function isValidRequiredMonths(value: number | null): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+
+function toMonthKey(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** The N complete calendar months immediately before `now`. */
+export function expectedCompletedMonthKeys(requiredMonths: number, now = new Date()): string[] {
+  if (!Number.isInteger(requiredMonths) || requiredMonths < 1) return [];
+
+  // Product operates in Malaysia. Shift to MYT before reading UTC parts so
+  // month-boundary behavior does not depend on the deployment server's TZ.
+  const malaysiaNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const months: string[] = [];
+  for (let offset = requiredMonths; offset >= 1; offset -= 1) {
+    months.push(toMonthKey(new Date(Date.UTC(malaysiaNow.getUTCFullYear(), malaysiaNow.getUTCMonth() - offset, 1))));
+  }
+  return months;
+}
+
+/**
+ * The most recent *complete* calendar month, as "YYYY-MM" — the latest
+ * month selectable for period-based evidence. The current, still-open
+ * month is never a complete evidence period (mirrors the same rule
+ * assign_document_type_and_period enforces server-side). Pure and
+ * testable via the `now` parameter — callers (e.g. DocumentTypeCell's
+ * month-picker `max` attribute) must call this instead of reading
+ * Date.now() directly during render, which React's purity rules forbid.
+ */
+export function latestSelectableMonthKey(now = new Date()): string {
+  const malaysiaNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  return toMonthKey(new Date(Date.UTC(malaysiaNow.getUTCFullYear(), malaysiaNow.getUTCMonth() - 1, 1)));
+}
+
+export function evaluatePeriodCoverage(
+  periods: readonly (string | null)[],
+  requiredMonths: number,
+  now = new Date(),
+): { uploadedCount: number; missingMonthKeys: string[]; complete: boolean } {
+  const expected = expectedCompletedMonthKeys(requiredMonths, now);
+  const uploaded = new Set(
+    periods
+      .filter((period): period is string => period !== null && /^\d{4}-\d{2}-\d{2}$/.test(period))
+      .map((period) => period.slice(0, 7)),
+  );
+  const missingMonthKeys = expected.filter((month) => !uploaded.has(month));
+
+  return {
+    uploadedCount: expected.length - missingMonthKeys.length,
+    missingMonthKeys,
+    complete: expected.length > 0 && missingMonthKeys.length === 0,
+  };
+}

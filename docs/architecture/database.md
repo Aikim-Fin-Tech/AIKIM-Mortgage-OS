@@ -20,7 +20,7 @@ live only in the Supabase SQL Editor. Producing a real baseline is top priority 
 | `loan_cases` | Canonical. `case_number` = human key (`ML-YYYY-NNN`). **Planned columns** `nationality`, `income_country`, `employment_type`, `income_structure` — free text, authored in `supabase/migrations/20260722010000_mortgage_rules_engine.sql`, not confirmed run yet. Drive mortgage rule matching; see [../decisions/0006-mortgage-rules-engine.md](../decisions/0006-mortgage-rules-engine.md). |
 | `customers` | `full_name`, `phone`, `email`, `ic_number`, `address`, `user_profile_id` (bridge to `auth.users -> public.user_profiles`; unpopulated today but has confirmed live RLS/RPC references — see `customers_select_scope` and `assign_document_type` below). **Removed column:** `assigned_user_id` (FK -> an out-of-band, unlinked `public.users` table, never created or read by this repo, zero references at every layer checked) — dropped via `supabase/migrations/20260903010000_remove_customers_assigned_user_id.sql`; see [0018](../decisions/0018-remove-customers-assigned-user-id.md). **Confirmed run in Production on 2026-09-10** — post-migration verification confirmed the column and its FK (`customers_assigned_user_id_fkey`) are gone, row count (11) and every other column unaffected, and `public.users` (0 rows) untouched. The out-of-band `public.users` table it referenced, and 17 other tables discovered in the same investigation, remain unclassified and untouched. |
 | `bankers` | `full_name`, `bank_name`, `branch`, `phone`, `email` |
-| `documents` | `status`, `created_at`, `verified_at`, FK `loan_case_id`, `document_types`. **Planned columns** `file_name`, `storage_path`, `file_size`, `mime_type`, `uploaded_by_user_id`, `storage_provider` (default `'supabase'`), `document_hash` (nullable, unused), `processing_status` (default `'UPLOADED'`) — authored in `supabase/migrations/20260721010000_document_management_mvp.sql` (additive, `IF NOT EXISTS`), not confirmed run yet. |
+| `documents` | `status`, `created_at`, `verified_at`, FK `loan_case_id`, `document_types`. **Planned columns** `file_name`, `storage_path`, `file_size`, `mime_type`, `uploaded_by_user_id`, `storage_provider` (default `'supabase'`), `document_hash` (nullable, unused), `processing_status` (default `'UPLOADED'`) — authored in `supabase/migrations/20260721010000_document_management_mvp.sql` (additive, `IF NOT EXISTS`), not confirmed run yet. **Planned column** `document_period` (nullable `date`, normalized to the first day of its calendar month via `documents_document_period_first_day_check`) — set only for `salary_slip`/`bank_statement` evidence (rejected for every other `ocr_kind`), null until staff confirms a month even after auto-classification assigns the type. A partial unique index (`documents_case_type_period_unique_idx` on `(loan_case_id, document_type_id, document_period)` where both are non-null) enforces one document per case/type/month at the database level, independent of and stronger than any application-level duplicate check. Written exclusively via `assign_document_type_and_period` (see Functions below), never a direct `update`. Authored in `supabase/migrations/20260911010000_monthly_document_periods.sql`; see [0019](../decisions/0019-monthly-document-period-tracking.md). Not confirmed run yet. |
 | `document_types` | `name`. **Planned columns** `category_id` → `document_categories` (`20260722010000_mortgage_rules_engine.sql`), `ocr_kind` (`nric`\|`salary_slip`\|`bank_statement`\|`epf_statement`\|`employment_letter`\|`ea_form`\|null — originally `nric`\|`salary_slip`\|null in `20260724010000_ocr_document_extraction.sql`, widened to all 6 `src/lib/ocr/types.ts` `OCRDocumentKind` values by `20260802010000_document_screening_confidence_validation.sql` per [0016](../decisions/0016-document-screening-classification-and-validation.md) Decision 4 — the `document_types_ocr_kind_valid` CHECK constraint was dropped and recreated, not edited in place). None confirmed run yet. Every existing row will have `ocr_kind = null` until a human tags the real document types via SQL (no admin UI for this exists) — for the 4 new kinds, matching `document_types` rows (e.g. Bank Statement, EPF Statement, Employment Letter, EA Form) may not exist at all yet; `20260802010000_document_screening_confidence_validation.sql` deliberately does not insert them, matching `20260724010000_ocr_document_extraction.sql`'s own precedent (see [0008](../decisions/0008-ocr-and-ai-case-summary.md)) of leaving this entirely to a human SQL Editor step. |
 | `user_profiles` | `auth_user_id → auth.users`, `full_name`, `role` |
 | `audit_logs` | Trigger-populated. RLS: `super_admin`-only read today. |
@@ -209,6 +209,28 @@ document_status: pending | verified | rejected
   only to `super_admin`) with the RPC still reporting success. Mirrored at
   the app layer by `shouldRejectUnlinkedBanker()` in
   `src/lib/loan-cases/should-reject-unlinked-banker.ts`.
+- `assign_document_type_and_period(p_document_id uuid, p_document_type_id uuid, p_document_period date) returns void`
+  — `SECURITY DEFINER`, authored in
+  `supabase/migrations/20260911010000_monthly_document_periods.sql`, **not
+  confirmed run yet**. Replaces the earlier 2-argument `assign_document_type`
+  as the sole sanctioned way to set `documents.document_type_id` from the
+  client — same `STAFF_ROLES` + case-visibility checks
+  (`is_customer_authorized_for_current_banker`/`loan_cases_select_scope`
+  branches, mirrored verbatim), plus: rejects a document month for any
+  `ocr_kind` other than `salary_slip`/`bank_statement`; requires one for
+  those two; requires the month to be the first day of its calendar month;
+  rejects the current (incomplete) or a future month
+  (`Asia/Kuala_Lumpur`-anchored); and locks the target row (`for update`)
+  before re-checking for a duplicate case/type/month combination, re-raising
+  the database's own unique-index violation as a clean `23505` if the
+  duplicate check and the real constraint ever disagree under concurrency.
+  No RLS policy is touched by this function — it authorizes itself
+  explicitly, the same pattern `assign_document_type` already used.
+  **Cleanup pending**: the old `assign_document_type(uuid, uuid)` function
+  is no longer called anywhere in the app (confirmed by repository-wide
+  search) but has not been dropped — it remains in Production as an
+  unused, orphaned `SECURITY DEFINER` function until a human confirms
+  nothing else depends on it and authors a follow-up migration to drop it.
 - **`bankers_select_scope` / `customers_select_scope`** (RLS policies,
   `supabase/migrations/20260901020000_restrict_banker_customer_bankers_select.sql`):
   replace `bankers_select_authenticated` (previously: any authenticated

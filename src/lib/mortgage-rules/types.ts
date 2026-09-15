@@ -42,8 +42,17 @@ export type RequiredDocumentRow = {
   requiredCount: number;
   requiredMonths: number | null;
   uploadedCount: number;
-  /** Derived, never stored: "not_required" wins; otherwise uploadedCount >= requiredCount. */
-  status: "completed" | "missing" | "not_required";
+  /** Which of the expected complete months (for period-based types only) have no matching upload yet. Always empty for non-period-based types. */
+  missingMonthKeys: string[];
+  /**
+   * Derived, never stored: "not_required" wins; a period-based type
+   * (salary_slip/bank_statement) whose matched rule has no valid
+   * requiredMonths is "configuration_error" — never silently marked
+   * complete by falling back to requiredCount; other period-based rows use
+   * complete distinct-month coverage; every other type uses
+   * uploadedCount >= requiredCount.
+   */
+  status: "completed" | "missing" | "not_required" | "configuration_error";
   /**
    * From the matched rule's mortgage_rule_documents.is_mandatory, looked up
    * live at read time (loan_case_required_documents itself has no such

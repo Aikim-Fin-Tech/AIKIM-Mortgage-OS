@@ -4,9 +4,11 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DownloadIcon, EyeIcon, TrashIcon } from "@/components/dashboard/icons";
 import { DOCUMENT_STATUS_VARIANT, formatFileSize } from "@/lib/documents/document-status";
+import { latestSelectableMonthKey } from "@/lib/database/required-document-derivation";
 import { STAFF_ROLES } from "@/lib/auth/staff-roles";
 import type { DocumentExtractionSummary, DocumentTypeOption, LoanCaseDocument } from "@/lib/database/documents";
 import type { NricFields, SalarySlipFields } from "@/lib/ocr/types";
@@ -20,6 +22,14 @@ function formatDateTime(iso: string): string {
     minute: "2-digit",
     timeZone: "Asia/Kuala_Lumpur",
   }).format(new Date(iso));
+}
+
+function formatDocumentMonth(period: string): string {
+  return new Intl.DateTimeFormat("en-MY", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${period.slice(0, 7)}-01T00:00:00.000Z`));
 }
 
 function ExtractedFieldsSummary({ extraction }: { extraction: DocumentExtractionSummary }) {
@@ -55,7 +65,7 @@ function ExtractedFieldsSummary({ extraction }: { extraction: DocumentExtraction
  * dialog no longer offers a manual "General Document" choice. Only staff
  * (STAFF_ROLES, the same set every write path in this app already uses) get
  * the confirmation control; this is UI visibility only, not the security
- * boundary — assign_document_type's own STAFF_ROLES check plus RLS are what
+ * boundary — assign_document_type_and_period's own STAFF_ROLES check plus RLS are what
  * actually enforce it. Only a document_types row already in `documentTypes`
  * can be picked (a native <select>), so there is no free-text/UUID entry
  * path here.
@@ -71,40 +81,70 @@ function DocumentTypeCell({
   documentTypes: DocumentTypeOption[];
   userRole: string | null;
   isPending: boolean;
-  onAssignType: (doc: LoanCaseDocument, documentTypeId: string) => void;
+  onAssignType: (doc: LoanCaseDocument, documentTypeId: string, documentPeriod: string | null) => void;
 }) {
-  const [selectedTypeId, setSelectedTypeId] = useState("");
+  const [selectedTypeId, setSelectedTypeId] = useState(doc.documentTypeId ?? "");
+  const [selectedPeriod, setSelectedPeriod] = useState(doc.documentPeriod?.slice(0, 7) ?? "");
+  const selectedType = documentTypes.find((type) => type.id === selectedTypeId) ?? null;
+  const requiresPeriod = selectedType?.ocrKind === "salary_slip" || selectedType?.ocrKind === "bank_statement";
+  // Reads "now" through a pure, testable helper — never Date.now()/new
+  // Date() directly in the render body, which violates React's
+  // components-must-be-pure rule. See required-document-derivation.ts.
+  const maxPeriod = latestSelectableMonthKey();
 
-  if (doc.documentType !== null) {
-    return <>{doc.documentType}</>;
+  if (doc.documentType !== null && (!requiresPeriod || doc.documentPeriod !== null)) {
+    return (
+      <div>
+        <p>{doc.documentType}</p>
+        {doc.documentPeriod ? <p className="text-xs text-slate-500">{formatDocumentMonth(doc.documentPeriod)}</p> : null}
+      </div>
+    );
   }
 
   if (!userRole || !STAFF_ROLES.has(userRole)) {
-    return <Badge variant="warning">Needs type confirmation</Badge>;
+    return <Badge variant="warning">{doc.documentType ? "Needs month confirmation" : "Needs type confirmation"}</Badge>;
   }
 
   return (
     <div className="flex items-center gap-1.5">
-      <Badge variant="warning">Needs type confirmation</Badge>
-      <Select
-        value={selectedTypeId}
-        onChange={(event) => setSelectedTypeId(event.target.value)}
-        disabled={isPending}
-        className="h-8 text-xs"
-      >
-        <option value="">Select type…</option>
-        {documentTypes.map((type) => (
-          <option key={type.id} value={type.id}>
-            {type.name}
-          </option>
-        ))}
-      </Select>
+      <Badge variant="warning">{doc.documentType ? "Needs month confirmation" : "Needs type confirmation"}</Badge>
+      {doc.documentType ? (
+        <span className="text-xs font-medium text-slate-700">{doc.documentType}</span>
+      ) : (
+        <Select
+          value={selectedTypeId}
+          onChange={(event) => {
+            setSelectedTypeId(event.target.value);
+            setSelectedPeriod("");
+          }}
+          disabled={isPending}
+          className="h-8 text-xs"
+        >
+          <option value="">Select type…</option>
+          {documentTypes.map((type) => (
+            <option key={type.id} value={type.id}>
+              {type.name}
+            </option>
+          ))}
+        </Select>
+      )}
+      {requiresPeriod ? (
+        <Input
+          type="month"
+          aria-label="Document month"
+          value={selectedPeriod}
+          max={maxPeriod}
+          onChange={(event) => setSelectedPeriod(event.target.value)}
+          disabled={isPending}
+          className="h-8 w-36 text-xs"
+        />
+      ) : null}
       <Button
         type="button"
         variant="outline"
         size="sm"
-        disabled={isPending || !selectedTypeId}
-        onClick={() => onAssignType(doc, selectedTypeId)}
+        disabled={isPending || !selectedTypeId || (requiresPeriod && !selectedPeriod)}
+        onClick={() => onAssignType(doc, selectedTypeId, requiresPeriod ? selectedPeriod : null)}
       >
         {isPending ? "Saving..." : "Confirm"}
       </Button>
@@ -131,7 +171,7 @@ export function DocumentsTable({
   onDownload: (doc: LoanCaseDocument) => void;
   onDelete: (doc: LoanCaseDocument) => void;
   onExtract: (doc: LoanCaseDocument) => void;
-  onAssignType: (doc: LoanCaseDocument, documentTypeId: string) => void;
+  onAssignType: (doc: LoanCaseDocument, documentTypeId: string, documentPeriod: string | null) => void;
 }) {
   if (documents.length === 0) {
     return (

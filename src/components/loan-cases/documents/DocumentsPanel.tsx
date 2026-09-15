@@ -78,10 +78,10 @@ export function DocumentsPanel({
     router.refresh();
   }
 
-  async function handleAssignType(doc: LoanCaseDocument, documentTypeId: string) {
+  async function handleAssignType(doc: LoanCaseDocument, documentTypeId: string, documentPeriod: string | null) {
     setListError(null);
     setPendingDocumentId(doc.id);
-    const result = await assignDocumentTypeAction(caseNumber, doc.id, documentTypeId);
+    const result = await assignDocumentTypeAction(caseNumber, doc.id, documentTypeId, documentPeriod);
     setPendingDocumentId(null);
 
     if (result.error) {

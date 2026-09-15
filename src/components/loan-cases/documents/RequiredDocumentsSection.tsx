@@ -7,12 +7,14 @@ const STATUS_LABEL: Record<RequiredDocumentRow["status"], string> = {
   completed: "Completed",
   missing: "Pending",
   not_required: "Not Required",
+  configuration_error: "Rule Misconfigured",
 };
 
 const STATUS_VARIANT: Record<RequiredDocumentRow["status"], BadgeVariant> = {
   completed: "success",
   missing: "warning",
   not_required: "default",
+  configuration_error: "danger",
 };
 
 export function RequiredDocumentsSection({
@@ -89,9 +91,21 @@ export function RequiredDocumentsSection({
                 </TableCell>
                 <TableCell>
                   <Badge variant={STATUS_VARIANT[row.status]}>{STATUS_LABEL[row.status]}</Badge>
-                  <span className="ml-2 text-xs text-slate-400">
-                    ({row.uploadedCount}/{row.requiredCount})
-                  </span>
+                  {row.status === "configuration_error" ? (
+                    <p className="mt-1 text-xs text-rose-700">
+                      This document type requires a number of months, but the matched rule doesn&rsquo;t specify one.
+                      Contact an administrator to fix the rule&rsquo;s configuration.
+                    </p>
+                  ) : (
+                    <span className="ml-2 text-xs text-slate-400">
+                      ({row.uploadedCount}/{row.requiredCount})
+                    </span>
+                  )}
+                  {row.missingMonthKeys.length > 0 ? (
+                    <p className="mt-1 text-xs text-amber-700">
+                      Missing: {row.missingMonthKeys.join(", ")}
+                    </p>
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))}

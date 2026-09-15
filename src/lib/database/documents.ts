@@ -15,6 +15,7 @@ import type { OCRDocumentKind, OCRFieldsFor } from "@/lib/ocr/types";
 export type DocumentTypeOption = {
   id: string;
   name: string;
+  ocrKind: OCRDocumentKind | null;
 };
 
 /** The most recent OCR attempt for a document, if its type is OCR-eligible. */
@@ -30,6 +31,8 @@ export type LoanCaseDocument = {
   fileName: string | null;
   storagePath: string | null;
   documentType: string | null;
+  documentTypeId: string | null;
+  documentPeriod: string | null;
   uploadedByName: string | null;
   uploadedAt: string;
   fileSize: number | null;
@@ -60,6 +63,8 @@ type DocumentRow = {
   status: string;
   created_at: string;
   uploaded_by_user_id: string | null;
+  document_type_id: string | null;
+  document_period: string | null;
   document_types: DocumentTypeEmbed | DocumentTypeEmbed[] | null;
 };
 
@@ -105,7 +110,7 @@ export async function getLoanCaseDocuments(caseNumber: string): Promise<GetLoanC
     const { data: documentRows, error: documentsError } = await supabase
       .from("documents")
       .select(
-        "id, file_name, storage_path, file_size, mime_type, status, created_at, uploaded_by_user_id, document_types ( name, ocr_kind )",
+        "id, file_name, storage_path, file_size, mime_type, status, created_at, uploaded_by_user_id, document_type_id, document_period, document_types ( name, ocr_kind )",
       )
       .eq("loan_case_id", caseRow.id)
       .order("created_at", { ascending: false });
@@ -181,6 +186,8 @@ export async function getLoanCaseDocuments(caseNumber: string): Promise<GetLoanC
         fileName: row.file_name,
         storagePath: row.storage_path,
         documentType: docType?.name ?? null,
+        documentTypeId: row.document_type_id,
+        documentPeriod: row.document_period,
         uploadedByName: row.uploaded_by_user_id ? (uploaderNames.get(row.uploaded_by_user_id) ?? null) : null,
         uploadedAt: row.created_at,
         fileSize: row.file_size,
@@ -205,14 +212,21 @@ export async function getDocumentTypeOptions(): Promise<{ types: DocumentTypeOpt
   try {
     const supabase = await createClient();
 
-    const { data, error } = await supabase.from("document_types").select("id, name").order("name", { ascending: true });
+    const { data, error } = await supabase.from("document_types").select("id, name, ocr_kind").order("name", { ascending: true });
 
     if (error) {
       console.error(`[getDocumentTypeOptions] Supabase query failed. code=${error.code ?? "unknown"} message=${error.message}`);
       return { types: [], error: error.message };
     }
 
-    return { types: data ?? [], error: null };
+    return {
+      types: (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        ocrKind: isOcrKind(row.ocr_kind) ? row.ocr_kind : null,
+      })),
+      error: null,
+    };
   } catch (unexpectedError) {
     const message = unexpectedError instanceof Error ? unexpectedError.message : "Unknown error";
     console.error(`[getDocumentTypeOptions] Unexpected error: ${message}`);
