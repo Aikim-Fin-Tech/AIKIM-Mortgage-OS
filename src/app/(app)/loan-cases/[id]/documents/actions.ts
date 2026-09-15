@@ -173,9 +173,9 @@ export type AssignDocumentTypeState = {
  * PD-017 Phase A — Banker confirmation for a document that couldn't be
  * auto-classified with confidence at upload time. This is the *only*
  * sanctioned way to change documents.document_type_id from the client: it
- * calls the assign_document_type SQL RPC (SECURITY DEFINER, its own
+ * calls the assign_document_type_and_period SQL RPC (SECURITY DEFINER, its own
  * STAFF_ROLES + case-visibility + document_type-existence checks — see
- * supabase/migrations/20260818010000_documents_update_policy.sql) and never
+ * supabase/migrations/20260911010000_monthly_document_periods.sql) and never
  * issues a direct `update` against public.documents, which has no UPDATE
  * policy or grant for this reason.
  *
@@ -187,6 +187,7 @@ export async function assignDocumentTypeAction(
   caseNumber: string,
   documentId: string,
   documentTypeId: string,
+  documentPeriod: string | null,
 ): Promise<AssignDocumentTypeState> {
   const currentUser = await getCurrentUser();
   if (!currentUser) {
@@ -194,6 +195,9 @@ export async function assignDocumentTypeAction(
   }
   if (!STAFF_ROLES.has(currentUser.role)) {
     return { error: "You do not have permission to assign a document type." };
+  }
+  if (documentPeriod !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(documentPeriod)) {
+    return { error: "Select a valid document month." };
   }
 
   const { loanCaseId, error: lookupError } = await resolveVisibleLoanCaseId(caseNumber);
@@ -203,14 +207,20 @@ export async function assignDocumentTypeAction(
 
   const supabase = await createClient();
 
-  const { error: rpcError } = await supabase.rpc("assign_document_type", {
+  const { error: rpcError } = await supabase.rpc("assign_document_type_and_period", {
     p_document_id: documentId,
     p_document_type_id: documentTypeId,
+    p_document_period: documentPeriod ? `${documentPeriod}-01` : null,
   });
 
   if (rpcError) {
     console.error(`[assignDocumentTypeAction] RPC failed. code=${rpcError.code ?? "unknown"} message=${rpcError.message}`);
-    return { error: "Could not update the document type. Please try again." };
+    const isDuplicatePeriod = rpcError.code === "23505" || rpcError.message.includes("duplicate document period");
+    return {
+      error: isDuplicatePeriod
+        ? "A document of this type already exists for the selected month. Choose the correct month or remove the duplicate."
+        : "Could not update the document type and month. Please try again.",
+    };
   }
 
   revalidatePath(`/loan-cases/${caseNumber}/documents`);

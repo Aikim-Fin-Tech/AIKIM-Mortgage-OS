@@ -1,6 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import type { RequiredDocumentRow } from "@/lib/mortgage-rules/types";
-import { asOcrDocumentKind, buildMandatoryLookupKey, resolveIsMandatory } from "./required-document-derivation";
+import {
+  asOcrDocumentKind,
+  buildMandatoryLookupKey,
+  evaluatePeriodCoverage,
+  isPeriodBasedDocumentKind,
+  isValidRequiredMonths,
+  resolveIsMandatory,
+} from "./required-document-derivation";
 
 /**
  * Read-only data access for the Documents tab's "Required Documents"
@@ -8,8 +15,8 @@ import { asOcrDocumentKind, buildMandatoryLookupKey, resolveIsMandatory } from "
  * which lists what's actually been *uploaded* — this module lists what the
  * matched mortgage rule says *should* be uploaded, and computes completion
  * live against the documents table (never a stored, potentially-stale flag).
- * Field-derivation logic (is_mandatory lookup, ocr_kind validation) lives in
- * the pure, dependency-free ./required-document-derivation.ts.
+ * Field-derivation logic (is_mandatory lookup, ocr_kind validation, monthly
+ * coverage) lives in the pure, dependency-free ./required-document-derivation.ts.
  */
 
 type DocumentTypeEmbed = {
@@ -68,7 +75,7 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
           "id, document_type_id, mortgage_rule_id, required_count, required_months, state, document_types ( name, ocr_kind, document_categories ( name ) )",
         )
         .eq("loan_case_id", caseRow.id),
-      supabase.from("documents").select("document_type_id").eq("loan_case_id", caseRow.id),
+      supabase.from("documents").select("document_type_id, document_period").eq("loan_case_id", caseRow.id),
     ]);
 
     if (requiredResult.error) {
@@ -85,10 +92,12 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
       return { loanCaseId: caseRow.id, rows: [], completionPercent: null, error: uploadedResult.error.message };
     }
 
-    const uploadedCounts = new Map<string, number>();
+    const uploadedPeriods = new Map<string, (string | null)[]>();
     for (const doc of uploadedResult.data ?? []) {
       if (!doc.document_type_id) continue;
-      uploadedCounts.set(doc.document_type_id, (uploadedCounts.get(doc.document_type_id) ?? 0) + 1);
+      const periods = uploadedPeriods.get(doc.document_type_id) ?? [];
+      periods.push(doc.document_period ?? null);
+      uploadedPeriods.set(doc.document_type_id, periods);
     }
 
     const rawRows = (requiredResult.data ?? []) as RequiredDocRow[];
@@ -119,10 +128,36 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
     const rows: RequiredDocumentRow[] = rawRows.map((row) => {
       const docType = normalizeEmbed(row.document_types);
       const category = docType ? normalizeEmbed(docType.document_categories) : null;
-      const uploadedCount = uploadedCounts.get(row.document_type_id) ?? 0;
+      const periods = uploadedPeriods.get(row.document_type_id) ?? [];
+
+      const isPeriodBased = isPeriodBasedDocumentKind(docType?.ocr_kind ?? null);
+      const monthsConfigured = isValidRequiredMonths(row.required_months);
+      const isMonthly = isPeriodBased && monthsConfigured;
+      // A period-based document type (salary_slip/bank_statement) whose
+      // matched rule has no valid required_months is a rule-configuration
+      // error, not "nothing required yet" — it must never silently fall
+      // back to the raw-file-count path below, since that would let
+      // duplicate months (e.g. three copies of June) masquerade as
+      // complete coverage. Every non-period-based kind (including
+      // epf_statement, deliberately required_count=1/required_months=null)
+      // never reaches this branch, since isPeriodBased is false for them.
+      const isMisconfigured = isPeriodBased && !monthsConfigured;
+
+      const coverage = isMonthly ? evaluatePeriodCoverage(periods, row.required_months!) : null;
+      const uploadedCount = coverage?.uploadedCount ?? periods.length;
 
       const status: RequiredDocumentRow["status"] =
-        row.state === "not_required" ? "not_required" : uploadedCount >= row.required_count ? "completed" : "missing";
+        row.state === "not_required"
+          ? "not_required"
+          : isMisconfigured
+            ? "configuration_error"
+            : coverage
+              ? coverage.complete
+                ? "completed"
+                : "missing"
+              : uploadedCount >= row.required_count
+                ? "completed"
+                : "missing";
 
       return {
         id: row.id,
@@ -132,6 +167,7 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
         requiredCount: row.required_count,
         requiredMonths: row.required_months,
         uploadedCount,
+        missingMonthKeys: coverage?.missingMonthKeys ?? [],
         status,
         isMandatory: resolveIsMandatory(row.mortgage_rule_id, row.document_type_id, mandatoryByKey),
         ocrKind: asOcrDocumentKind(docType?.ocr_kind ?? null),
