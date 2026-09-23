@@ -67,6 +67,14 @@ export type RequiredDocumentRow = {
    * review item, never an error state.
    */
   ocrKind: OCRDocumentKind | null;
+  /**
+   * From the matched rule's mortgage_rule_documents.display_order, looked
+   * up the same way as isMandatory (loan_case_required_documents has no
+   * display_order column of its own). Null when the originating
+   * rule-document line item can no longer be found — getRequiredDocuments()
+   * sorts such rows after every row with a resolved value, never first.
+   */
+  displayOrder: number | null;
 };
 
 // ---------------------------------------------------------------------------
