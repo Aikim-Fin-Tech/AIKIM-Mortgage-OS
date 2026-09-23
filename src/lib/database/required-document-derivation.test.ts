@@ -7,7 +7,9 @@ import {
   isPeriodBasedDocumentKind,
   isValidRequiredMonths,
   latestSelectableMonthKey,
+  resolveDisplayOrder,
   resolveIsMandatory,
+  sortByDisplayOrder,
 } from "./required-document-derivation";
 
 /**
@@ -222,5 +224,116 @@ describe("fail-closed configuration check (mirrors getRequiredDocuments' branchi
     expect(isMisconfigured("nric", null)).toBe(false);
     expect(isMisconfigured("employment_letter", null)).toBe(false);
     expect(isMisconfigured(null, null)).toBe(false);
+  });
+});
+
+describe("resolveDisplayOrder", () => {
+  it("returns the mapped display_order for a resolvable key", () => {
+    const map = new Map([["rule-1:doc-type-1", 3]]);
+    expect(resolveDisplayOrder("rule-1", "doc-type-1", map)).toBe(3);
+  });
+
+  it("returns null, not a guessed default, when mortgageRuleId is null", () => {
+    const map = new Map([["rule-1:doc-type-1", 3]]);
+    expect(resolveDisplayOrder(null, "doc-type-1", map)).toBeNull();
+  });
+
+  it("returns null when the rule-document line item can't be found", () => {
+    const map = new Map([["rule-1:doc-type-1", 3]]);
+    expect(resolveDisplayOrder("rule-1", "doc-type-does-not-exist", map)).toBeNull();
+  });
+});
+
+describe("sortByDisplayOrder", () => {
+  /**
+   * A minimal stand-in for RequiredDocumentRow carrying every field the
+   * business-rule checks below need to prove nothing is lost or mutated by
+   * sorting — same approach as the fail-closed-configuration tests above.
+   */
+  type Row = {
+    documentName: string;
+    displayOrder: number | null;
+    isMandatory: boolean | null;
+    requiredCount: number;
+    requiredMonths: number | null;
+  };
+
+  it("orders rows ascending by display_order, regardless of input order", () => {
+    const rows: Row[] = [
+      { documentName: "Bank Statement", displayOrder: 5, isMandatory: true, requiredCount: 3, requiredMonths: 3 },
+      { documentName: "NRIC / Identification Copy", displayOrder: 1, isMandatory: true, requiredCount: 1, requiredMonths: null },
+      { documentName: "Salary Slip", displayOrder: 4, isMandatory: true, requiredCount: 3, requiredMonths: 3 },
+    ];
+    expect(sortByDisplayOrder(rows).map((r) => r.documentName)).toEqual([
+      "NRIC / Identification Copy",
+      "Salary Slip",
+      "Bank Statement",
+    ]);
+  });
+
+  it("places rows with no resolvable display_order after every ordered row, sorted by name", () => {
+    const rows: Row[] = [
+      { documentName: "Legacy Document B", displayOrder: null, isMandatory: null, requiredCount: 1, requiredMonths: null },
+      { documentName: "CTOS / CCRIS Credit Report", displayOrder: 7, isMandatory: true, requiredCount: 1, requiredMonths: null },
+      { documentName: "Legacy Document A", displayOrder: null, isMandatory: null, requiredCount: 1, requiredMonths: null },
+    ];
+    expect(sortByDisplayOrder(rows).map((r) => r.documentName)).toEqual([
+      "CTOS / CCRIS Credit Report",
+      "Legacy Document A",
+      "Legacy Document B",
+    ]);
+  });
+
+  it("does not throw and produces a deterministic order when every row lacks a display_order", () => {
+    const rows: Row[] = [
+      { documentName: "Zebra Document", displayOrder: null, isMandatory: true, requiredCount: 1, requiredMonths: null },
+      { documentName: "Alpha Document", displayOrder: null, isMandatory: true, requiredCount: 1, requiredMonths: null },
+    ];
+    expect(() => sortByDisplayOrder(rows)).not.toThrow();
+    expect(sortByDisplayOrder(rows).map((r) => r.documentName)).toEqual(["Alpha Document", "Zebra Document"]);
+  });
+
+  it("preserves every field untouched while reordering — the approved 9-document checklist", () => {
+    // Mirrors the approved order for the Malaysian/Outside Malaysia/Salaried/Fixed
+    // rule: CPF Statement stays optional, CBS Report stays mandatory, and
+    // Salary Slip/Bank Statement keep their 3-month requirements, regardless
+    // of the order the rows happened to arrive from the database in.
+    const rows: Row[] = [
+      { documentName: "CBS Report", displayOrder: 8, isMandatory: true, requiredCount: 1, requiredMonths: null },
+      { documentName: "CPF Statement", displayOrder: 6, isMandatory: false, requiredCount: 1, requiredMonths: null },
+      { documentName: "Bank Statement", displayOrder: 5, isMandatory: true, requiredCount: 3, requiredMonths: 3 },
+      { documentName: "Salary Slip", displayOrder: 4, isMandatory: true, requiredCount: 3, requiredMonths: 3 },
+      { documentName: "Employment Confirmation Letter", displayOrder: 3, isMandatory: true, requiredCount: 1, requiredMonths: null },
+      { documentName: "Working Pass / PR Copy", displayOrder: 2, isMandatory: true, requiredCount: 1, requiredMonths: null },
+      { documentName: "NRIC / Identification Copy", displayOrder: 1, isMandatory: true, requiredCount: 1, requiredMonths: null },
+      { documentName: "CTOS / CCRIS Credit Report", displayOrder: 7, isMandatory: true, requiredCount: 1, requiredMonths: null },
+      { documentName: "Overseas Tax / Income Document", displayOrder: 9, isMandatory: true, requiredCount: 1, requiredMonths: null },
+    ];
+
+    const sorted = sortByDisplayOrder(rows);
+
+    expect(sorted.map((r) => r.documentName)).toEqual([
+      "NRIC / Identification Copy",
+      "Working Pass / PR Copy",
+      "Employment Confirmation Letter",
+      "Salary Slip",
+      "Bank Statement",
+      "CPF Statement",
+      "CTOS / CCRIS Credit Report",
+      "CBS Report",
+      "Overseas Tax / Income Document",
+    ]);
+
+    const cpf = sorted.find((r) => r.documentName === "CPF Statement");
+    expect(cpf?.isMandatory).toBe(false);
+
+    const cbs = sorted.find((r) => r.documentName === "CBS Report");
+    expect(cbs?.isMandatory).toBe(true);
+
+    const salarySlip = sorted.find((r) => r.documentName === "Salary Slip");
+    expect(salarySlip).toMatchObject({ requiredCount: 3, requiredMonths: 3 });
+
+    const bankStatement = sorted.find((r) => r.documentName === "Bank Statement");
+    expect(bankStatement).toMatchObject({ requiredCount: 3, requiredMonths: 3 });
   });
 });

@@ -46,6 +46,47 @@ export function resolveIsMandatory(
 }
 
 /**
+ * Same composite-key lookup as resolveIsMandatory, for
+ * mortgage_rule_documents.display_order — loan_case_required_documents has
+ * no display_order column of its own either. Null (never a guessed 0 or
+ * Infinity) whenever the originating rule-document line item can't be
+ * found, for the same reasons resolveIsMandatory returns null in that case.
+ */
+export function resolveDisplayOrder(
+  mortgageRuleId: string | null,
+  documentTypeId: string,
+  displayOrderByKey: ReadonlyMap<string, number>,
+): number | null {
+  const key = buildMandatoryLookupKey(mortgageRuleId, documentTypeId);
+  if (key === null) return null;
+  return displayOrderByKey.get(key) ?? null;
+}
+
+/**
+ * Sorts Required Documents rows by mortgage_rule_documents.display_order,
+ * ascending. Never hardcodes a document-name order — the ordering is purely
+ * data-driven from the matched rule's own line items. Rows whose
+ * display_order couldn't be resolved (legacy checklist generated before
+ * this field existed, or the originating rule-document line item was since
+ * edited/removed) are placed after every ordered row, so a missing value
+ * degrades gracefully instead of appearing first or throwing off the whole
+ * list. Ties (including among unordered rows) fall back to the document
+ * name, so the result is fully deterministic regardless of input order.
+ */
+export function sortByDisplayOrder<T extends { displayOrder: number | null; documentName: string }>(
+  rows: readonly T[],
+): T[] {
+  return [...rows].sort((a, b) => {
+    if (a.displayOrder !== null && b.displayOrder !== null) {
+      return a.displayOrder - b.displayOrder || a.documentName.localeCompare(b.documentName);
+    }
+    if (a.displayOrder !== null) return -1;
+    if (b.displayOrder !== null) return 1;
+    return a.documentName.localeCompare(b.documentName);
+  });
+}
+
+/**
  * Only salary_slip and bank_statement carry a document_period — every other
  * ocr_kind (including epf_statement, which is deliberately required_count=1/
  * required_months=null) is untouched by any of the monthly-coverage logic

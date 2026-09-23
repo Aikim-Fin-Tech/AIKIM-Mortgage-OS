@@ -6,7 +6,9 @@ import {
   evaluatePeriodCoverage,
   isPeriodBasedDocumentKind,
   isValidRequiredMonths,
+  resolveDisplayOrder,
   resolveIsMandatory,
+  sortByDisplayOrder,
 } from "./required-document-derivation";
 
 /**
@@ -105,22 +107,27 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
     const ruleIds = [...new Set(rawRows.map((row) => row.mortgage_rule_id).filter((id): id is string => id !== null))];
 
     const mandatoryByKey = new Map<string, boolean>();
+    const displayOrderByKey = new Map<string, number>();
     if (ruleIds.length > 0) {
       const { data: ruleDocRows, error: ruleDocsError } = await supabase
         .from("mortgage_rule_documents")
-        .select("mortgage_rule_id, document_type_id, is_mandatory")
+        .select("mortgage_rule_id, document_type_id, is_mandatory, display_order")
         .in("mortgage_rule_id", ruleIds);
 
       if (ruleDocsError) {
-        // Non-fatal: is_mandatory degrades to null (never a guessed default)
-        // for every row rather than failing the whole checklist read.
+        // Non-fatal: is_mandatory/displayOrder degrade to null (never a
+        // guessed default) for every row rather than failing the whole
+        // checklist read.
         console.error(
           `[getRequiredDocuments] mortgage_rule_documents lookup failed for ${caseNumber}. code=${ruleDocsError.code ?? "unknown"} message=${ruleDocsError.message}`,
         );
       } else {
         for (const ruleDoc of ruleDocRows ?? []) {
           const key = buildMandatoryLookupKey(ruleDoc.mortgage_rule_id, ruleDoc.document_type_id);
-          if (key !== null) mandatoryByKey.set(key, ruleDoc.is_mandatory);
+          if (key !== null) {
+            mandatoryByKey.set(key, ruleDoc.is_mandatory);
+            displayOrderByKey.set(key, ruleDoc.display_order);
+          }
         }
       }
     }
@@ -171,16 +178,24 @@ export async function getRequiredDocuments(caseNumber: string): Promise<GetRequi
         status,
         isMandatory: resolveIsMandatory(row.mortgage_rule_id, row.document_type_id, mandatoryByKey),
         ocrKind: asOcrDocumentKind(docType?.ocr_kind ?? null),
+        displayOrder: resolveDisplayOrder(row.mortgage_rule_id, row.document_type_id, displayOrderByKey),
       };
     });
 
-    const activeRows = rows.filter((r) => r.status !== "not_required");
+    // Sort by the matched rule's own display_order — never a hardcoded
+    // document-name order. Rows with no resolvable display_order (legacy
+    // checklists generated before this field existed, or a rule-document
+    // line item since edited/removed) sort after every ordered row instead
+    // of breaking the list or appearing first.
+    const sortedRows = sortByDisplayOrder(rows);
+
+    const activeRows = sortedRows.filter((r) => r.status !== "not_required");
     const completionPercent =
       activeRows.length === 0
         ? null
         : Math.round((activeRows.filter((r) => r.status === "completed").length / activeRows.length) * 100);
 
-    return { loanCaseId: caseRow.id, rows, completionPercent, error: null };
+    return { loanCaseId: caseRow.id, rows: sortedRows, completionPercent, error: null };
   } catch (unexpectedError) {
     const message = unexpectedError instanceof Error ? unexpectedError.message : "Unknown error";
     console.error(`[getRequiredDocuments] Unexpected error for ${caseNumber}: ${message}`);
